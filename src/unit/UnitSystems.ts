@@ -1,5 +1,8 @@
 export interface UnitSystemDefinition {
+    mass: string,
+    force: string,
     velocity: string;
+    flowrate: string;
     volume: string;
     density: string;
     pressure: string;
