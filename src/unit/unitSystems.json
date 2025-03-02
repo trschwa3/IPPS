@@ -12,7 +12,10 @@
       "viscosity": "Pa·s",
       "permeability": "m²",
       "temperature": "K",
-      "compressibility":"Pa⁻¹"
+      "compressibility":"Pa⁻¹",
+      "gasFVF":"m³/m³",
+      "oilFVF":"m³/m³",
+      "gor":"m³/m³"
     },
     "Imperial": {
       "mass":"lbm",
@@ -27,13 +30,16 @@
       "viscosity": "lbm/(ft·s)",
       "permeability": "darcy",
       "temperature": "°F",
-      "compressibility":"psi⁻¹"
+      "compressibility":"psi⁻¹",
+      "gasFVF":"rcf/scf",
+      "oilFVF":"bbl/STB",
+      "gor":"scf/STB"
     },
     "Oil Field": {
       "mass":"lbm",
       "force":"lbf",
       "velocity": "ft/s",
-      "flowrate": "bbl/day",
+      "flowrate": "STB/day",
       "volume": "bbl",
       "density": "lbm/gal",
       "pressure": "psi",
@@ -42,7 +48,10 @@
       "viscosity": "cp",
       "permeability": "mD",
       "temperature": "°F",
-      "compressibility":"psi⁻¹"
+      "compressibility":"psi⁻¹",
+      "gasFVF":"rcf/scf",
+      "oilFVF":"bbl/STB",
+      "gor":"MCF/STB"
     }
   }
   

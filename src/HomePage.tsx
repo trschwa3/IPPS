@@ -6,7 +6,7 @@ import './HomePage.css';
 import { useNavigate } from 'react-router-dom';
 
 // Default unit systems imported from JSON
-const defaultUnitSystems = rawUnitSystems as UnitSystems;
+const defaultUnitSystems = rawUnitSystems as unknown as UnitSystems;
 
 const HomePage: React.FC = () => {
   const navigate = useNavigate();

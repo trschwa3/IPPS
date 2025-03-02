@@ -12,6 +12,9 @@ export interface UnitSystemDefinition {
     permeability: string;
     temperature: string;
     compressibility: string;
+    gasFVF: string,
+    oilFVF:string,
+    gor:string
     // Add any other properties you have
   }
   

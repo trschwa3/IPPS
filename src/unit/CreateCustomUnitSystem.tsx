@@ -1,26 +1,31 @@
 import React, { useState } from 'react';
 import { UnitSystemDefinition } from './UnitSystems';
+import UnitConverter from './UnitConverter';
 
 interface CreateCustomUnitSystemProps {
   onSave: (systemName: string, systemDefinition: UnitSystemDefinition) => void;
   onCancel: () => void;
 }
 
-// Predefined unit options for each dimension
+// Build available units from UnitConverter properties
 const availableUnits = {
-  mass: ['kg', 'lbm', 'slug', 'g'],
-  force: ['N', 'lbf', 'kgf', 'kip', 'dyne'],
-  velocity: ['m/s', 'ft/s', 'mph', 'km/h'],
-  flowrate: ['bbl/day', "Mscf/day", "m³/day", "m³/s","L/s",],
-  volume: ['m³', 'ft³', 'bbl', 'gal', 'L', 'Mscf'],
-  density: ['kg/m³', 'lbm/ft³', 'lbm/gal'],
-  pressure: ['Pa', 'kPa', 'MPa', 'mmHg', 'torr', 'bar', 'psi'],
-  length: ['m', 'cm', 'mm', 'km', 'ft', 'in'],
-  area: ['m²', 'ft²', 'acre', 'hectare', 'km²'],
-  viscosity: ['Pa·s', 'cp', 'lbm/(ft·s)'],
-  permeability: ['m²', 'darcy', 'mD', 'ft²'],
+  mass: Object.keys(UnitConverter.massFactors),
+  force: Object.keys(UnitConverter.forceFactors),
+  velocity: Object.keys(UnitConverter.velocityFactors),
+  flowrate: Object.keys(UnitConverter.flowrateFactors),
+  volume: Object.keys(UnitConverter.volumeFactors),
+  density: Object.keys(UnitConverter.densityFactors),
+  pressure: Object.keys(UnitConverter.pressureFactors),
+  length: Object.keys(UnitConverter.lengthFactors),
+  area: Object.keys(UnitConverter.areaFactors),
+  viscosity: Object.keys(UnitConverter.viscosityFactors),
+  permeability: Object.keys(UnitConverter.permeabilityFactors),
+  compressibility: Object.keys(UnitConverter.compressibilityFactors),
+  oilFVF: Object.keys(UnitConverter.oilFVFFactors),
+  gasFVF: Object.keys(UnitConverter.gasFVFFactors),
+  GOR: Object.keys(UnitConverter.oilFVFFactors),
+  // Temperature is not defined in UnitConverter factors, so list manually:
   temperature: ['K', '°C', '°F', '°R'],
-  compressibility: ['Pa⁻¹', 'psi⁻¹'],
 } as const;
 
 const CreateCustomUnitSystem: React.FC<CreateCustomUnitSystemProps> = ({ onSave, onCancel }) => {
@@ -38,7 +43,10 @@ const CreateCustomUnitSystem: React.FC<CreateCustomUnitSystemProps> = ({ onSave,
     viscosity: '',
     permeability: '',
     temperature: '',
-    compressibility: ''
+    compressibility: '',
+    gasFVF:'',
+    oilFVF:'',
+    gor:''
   });
 
   const handleSystemNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -87,7 +95,7 @@ const CreateCustomUnitSystem: React.FC<CreateCustomUnitSystemProps> = ({ onSave,
           </label>
         </div>
 
-        {/* Render a dropdown for each dimension */}
+        {/* Render a dropdown for each dimension based on availableUnits */}
         {Object.keys(availableUnits).map((dimension) => {
           const options = availableUnits[dimension as keyof typeof availableUnits];
           return (

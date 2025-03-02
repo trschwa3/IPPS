@@ -1,7 +1,6 @@
 class UnitConverter {
     // Conversion factors relative to a chosen base unit for each dimension
-    // e.g., for "pressure" you define Pa -> 1, bar -> 1e5, etc.
-    
+  
     // Mass (base: kg)
     static massFactors: Record<string, number> = {
       kg: 1,
@@ -30,7 +29,9 @@ class UnitConverter {
     // Flowrate (base: m³/day)
     static flowrateFactors: Record<string, number> = {
       'm³/day': 1,
-      'bbl/day': 0.158987,    // 1 bbl = 0.158987 m³
+      'bbl/hr': 0.1589878 * 24,
+      'STB/day': 0.158987,    // 1 STB = 1 bbl
+      'STB/d': 0.158987,    // 1 STB = 1 bbl
       'Mcf/day': 28.3168466,  // 1000 ft³ = 28.3168466 m³
       'm³/s': 86400,          // 1 m³/s = 86400 m³/day
       'L/s': 86.4,            // 1 L/s = 86.4 m³/day
@@ -40,10 +41,12 @@ class UnitConverter {
     static volumeFactors: Record<string, number> = {
       'm³': 1,
       'ft³': 0.0283168466,
-      bbl: 0.158987, // oil barrel
+      bbl: 0.158987,
       gal: 0.00378541,
       L: 0.001,
-      Mscf: 28.3168466, // thousand cubic feet
+      'Mm³':1000,
+      Mscf: 28.3168466,
+      MCf: 28.3168466,
     };
   
     // Density (base: kg/m³)
@@ -87,7 +90,7 @@ class UnitConverter {
     static viscosityFactors: Record<string, number> = {
       'Pa·s': 1,
       cp: 0.001,
-      'lbm/(ft·s)': 1.48816394, // 1 lbm/(ft·s) ≈ 1.48816394 Pa·s
+      'lbm/(ft·s)': 1.48816394,
     };
   
     // Permeability (base: m²)
@@ -98,26 +101,46 @@ class UnitConverter {
       'ft²': 0.092903,
     };
   
-    // Compressibility (base: 1/Pa or Pa⁻¹)
-    // 1/psi ≈ 6894.76 × 1/Pa
+    // Compressibility (base: 1/Pa)
     static compressibilityFactors: Record<string, number> = {
       'Pa^-1': 1,
-      'Pa⁻¹': 1,      // some systems might store it with a minus sign
+      'Pa⁻¹': 1,
+      '1/Pa': 1,
       'psi^-1': 6894.76,
       'psi⁻¹': 6894.76,
+      '1/psi': 6894.76,
+    };
+
+    static gasFVFFactors: Record<string, number> = {
+      "m³/m³": 1,
+      "rcf/scf": 1,
+      "Mcf/scf": 1000,
+      "bbl/STB": 1,
+    };
+  
+    static oilFVFFactors: Record<string, number> = {
+      "m³/m³": 1,
+      "bbl/STB": 1,
+    };
+  
+    static gasOilRatioFactors: Record<string, number> = {
+      "scf/STB": 1,
+      "scf/rcf": 5.618,
+      "MCF/STB": 1000,
+      "m³/m³": 5.618,
     };
   
     /**
      * Converts a value from one unit to another for a given dimension.
      *
-     * @param dimension The dimension (e.g. "mass", "pressure", "temperature", etc.)
+     * @param dimension The dimension (e.g. "mass", "pressure", "temperature", "gas FVF", etc.)
      * @param value The numerical value to convert.
      * @param fromUnit The unit of the input value.
      * @param toUnit The target unit for conversion.
      * @returns The converted value.
      */
     static convert(dimension: string, value: number, fromUnit: string, toUnit: string): number {
-      // 1) Special handling: temperature
+      // Special handling for temperature
       if (dimension === 'temperature') {
         let valueInK: number;
         switch (fromUnit) {
@@ -149,30 +172,50 @@ class UnitConverter {
             throw new Error(`Unsupported temperature unit: ${toUnit}`);
         }
       }
-  
-      // 2) Flowrate
+      // For flowrate
       else if (dimension === 'flowrate') {
         const factors = UnitConverter.flowrateFactors;
         if (!(fromUnit in factors) || !(toUnit in factors)) {
           throw new Error(`Unsupported flowrate unit: ${fromUnit} or ${toUnit}`);
         }
-        const valueInBase = value * factors[fromUnit]; // to m³/day
+        const valueInBase = value * factors[fromUnit];
         return valueInBase / factors[toUnit];
       }
-  
-      // 3) Compressibility
+      // For compressibility
       else if (dimension === 'compressibility') {
         const factors = UnitConverter.compressibilityFactors;
         if (!(fromUnit in factors) || !(toUnit in factors)) {
-          throw new Error(
-            `Unsupported compressibility unit: ${fromUnit} or ${toUnit}`
-          );
+          throw new Error(`Unsupported compressibility unit: ${fromUnit} or ${toUnit}`);
         }
-        const valueInBase = value * factors[fromUnit]; // to base (1/Pa)
-        return valueInBase / factors[toUnit];          // then to target
+        const valueInBase = value * factors[fromUnit];
+        return valueInBase / factors[toUnit];
       }
-  
-      // 4) Everything else (mass, pressure, length, etc.)
+      // For the new dimensions:
+      else if (dimension === 'gas FVF') {
+        const factors = UnitConverter.gasFVFFactors;
+        if (!(fromUnit in factors) || !(toUnit in factors)) {
+          throw new Error(`Unsupported gas FVF unit: ${fromUnit} or ${toUnit}`);
+        }
+        const valueInBase = value * factors[fromUnit];
+        return valueInBase / factors[toUnit];
+      }
+      else if (dimension === 'oil FVF') {
+        const factors = UnitConverter.oilFVFFactors;
+        if (!(fromUnit in factors) || !(toUnit in factors)) {
+          throw new Error(`Unsupported oil FVF unit: ${fromUnit} or ${toUnit}`);
+        }
+        const valueInBase = value * factors[fromUnit];
+        return valueInBase / factors[toUnit];
+      }
+      else if (dimension === 'gor') {
+        const factors = UnitConverter.gasOilRatioFactors;
+        if (!(fromUnit in factors) || !(toUnit in factors)) {
+          throw new Error(`Unsupported gas-oil-ratio unit: ${fromUnit} or ${toUnit}`);
+        }
+        const valueInBase = value * factors[fromUnit];
+        return valueInBase / factors[toUnit];
+      }
+      // Everything else
       else {
         let factors: Record<string, number>;
         switch (dimension) {

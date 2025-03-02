@@ -83,7 +83,7 @@ const NodalAnalysisForm: React.FC<NodalAnalysisFormProps> = ({
   const commonFields = [
     { name: 'k',   label: 'Permeability, k',     unit: userUnits.permeability || 'mD' },
     { name: 'h',   label: 'Thickness, h',       unit: userUnits.length || 'ft' },
-    { name: 'Bo',  label: 'Formation Vol. Factor, B\u2080', unit: 'bbl/STB' },
+    { name: 'Bo',  label: 'Formation Vol. Factor, B\u2080', unit: userUnits.oilFVF || 'bbl/STB' },
     { name: 'muo', label: 'Oil Viscosity, μ\u2092', unit: userUnits.viscosity || 'cp' },
     { name: 's',   label: 'Skin Factor, s',     unit: 'dimensionless' },
     { name: 'rw',  label: 'Well radius, r\u2090', unit: userUnits.length || 'ft' },
@@ -255,7 +255,7 @@ const NodalAnalysisForm: React.FC<NodalAnalysisFormProps> = ({
         <>
           <div style={rowStyle}>
             <label style={labelStyle}>
-              Boundary Reservoir Pressure, p<sub>e</sub>:
+              Boundary Pressure, p<sub>e</sub>:
             </label>
             <input
               type="number"
