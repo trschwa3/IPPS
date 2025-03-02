@@ -20,6 +20,7 @@ const availableUnits = {
   viscosity: ['Pa·s', 'cp', 'lbm/(ft·s)'],
   permeability: ['m²', 'darcy', 'mD', 'ft²'],
   temperature: ['K', '°C', '°F', '°R'],
+  compressibility: ['Pa⁻¹', 'psi⁻¹'],
 } as const;
 
 const CreateCustomUnitSystem: React.FC<CreateCustomUnitSystemProps> = ({ onSave, onCancel }) => {
@@ -37,6 +38,7 @@ const CreateCustomUnitSystem: React.FC<CreateCustomUnitSystemProps> = ({ onSave,
     viscosity: '',
     permeability: '',
     temperature: '',
+    compressibility: ''
   });
 
   const handleSystemNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {

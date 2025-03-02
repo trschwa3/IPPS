@@ -1,6 +1,7 @@
 class UnitConverter {
     // Conversion factors relative to a chosen base unit for each dimension
-  
+    // e.g., for "pressure" you define Pa -> 1, bar -> 1e5, etc.
+    
     // Mass (base: kg)
     static massFactors: Record<string, number> = {
       kg: 1,
@@ -20,35 +21,36 @@ class UnitConverter {
   
     // Velocity (base: m/s)
     static velocityFactors: Record<string, number> = {
-      "m/s": 1,
-      "ft/s": 0.3048,
+      'm/s': 1,
+      'ft/s': 0.3048,
       mph: 0.44704,
-      "km/h": 0.27777778,
+      'km/h': 0.27777778,
     };
-
+  
+    // Flowrate (base: m³/day)
     static flowrateFactors: Record<string, number> = {
-        "m³/day": 1,
-        "bbl/day": 0.158987, // 1 bbl = 0.158987 m³
-        "Mcf/day": 28.3168466, // 1000 ft³ = 28.3168466 m³
-        "m³/s": 86400, // 1 m³/s = 86400 m³/day
-        "L/s": 86.4,   // 1 L/s = 0.001 m³/s = 86.4 m³/day
-      };
-      
+      'm³/day': 1,
+      'bbl/day': 0.158987,    // 1 bbl = 0.158987 m³
+      'Mcf/day': 28.3168466,  // 1000 ft³ = 28.3168466 m³
+      'm³/s': 86400,          // 1 m³/s = 86400 m³/day
+      'L/s': 86.4,            // 1 L/s = 86.4 m³/day
+    };
+  
     // Volume (base: m³)
     static volumeFactors: Record<string, number> = {
-      "m³": 1,
-      "ft³": 0.0283168466,
+      'm³': 1,
+      'ft³': 0.0283168466,
       bbl: 0.158987, // oil barrel
-      gal: 0.00378541, // US gallon
+      gal: 0.00378541,
       L: 0.001,
-      Mscf: 28.3168466, // thousand cubic feet: 1000 * 0.0283168466
+      Mscf: 28.3168466, // thousand cubic feet
     };
   
     // Density (base: kg/m³)
     static densityFactors: Record<string, number> = {
-      "kg/m³": 1,
-      "lbm/ft³": 16.0184634,
-      "lbm/gal": 119.826,
+      'kg/m³': 1,
+      'lbm/ft³': 16.0184634,
+      'lbm/gal': 119.826,
     };
   
     // Pressure (base: Pa)
@@ -74,26 +76,35 @@ class UnitConverter {
   
     // Area (base: m²)
     static areaFactors: Record<string, number> = {
-      "m²": 1,
-      "ft²": 0.092903,
+      'm²': 1,
+      'ft²': 0.092903,
       acre: 4046.86,
       hectare: 10000,
-      "km²": 1e6,
+      'km²': 1e6,
     };
   
     // Viscosity (base: Pa·s)
     static viscosityFactors: Record<string, number> = {
-      "Pa·s": 1,
+      'Pa·s': 1,
       cp: 0.001,
-      "lbm/(ft·s)": 1.48816394, // 1 lbm/(ft·s) ≈ 1.48816394 Pa·s
+      'lbm/(ft·s)': 1.48816394, // 1 lbm/(ft·s) ≈ 1.48816394 Pa·s
     };
   
     // Permeability (base: m²)
     static permeabilityFactors: Record<string, number> = {
-      "m²": 1,
+      'm²': 1,
       darcy: 9.869233e-13,
       mD: 9.869233e-16,
-      "ft²": 0.092903,
+      'ft²': 0.092903,
+    };
+  
+    // Compressibility (base: 1/Pa or Pa⁻¹)
+    // 1/psi ≈ 6894.76 × 1/Pa
+    static compressibilityFactors: Record<string, number> = {
+      'Pa^-1': 1,
+      'Pa⁻¹': 1,      // some systems might store it with a minus sign
+      'psi^-1': 6894.76,
+      'psi⁻¹': 6894.76,
     };
   
     /**
@@ -106,9 +117,8 @@ class UnitConverter {
      * @returns The converted value.
      */
     static convert(dimension: string, value: number, fromUnit: string, toUnit: string): number {
-      // Temperature conversion requires offset adjustments
+      // 1) Special handling: temperature
       if (dimension === 'temperature') {
-        // Convert input to Kelvin
         let valueInK: number;
         switch (fromUnit) {
           case 'K':
@@ -126,7 +136,6 @@ class UnitConverter {
           default:
             throw new Error(`Unsupported temperature unit: ${fromUnit}`);
         }
-        // Convert from Kelvin to target unit
         switch (toUnit) {
           case 'K':
             return valueInK;
@@ -140,17 +149,30 @@ class UnitConverter {
             throw new Error(`Unsupported temperature unit: ${toUnit}`);
         }
       }
-      // Flowrate conversion (using m³/day as base)
+  
+      // 2) Flowrate
       else if (dimension === 'flowrate') {
         const factors = UnitConverter.flowrateFactors;
         if (!(fromUnit in factors) || !(toUnit in factors)) {
           throw new Error(`Unsupported flowrate unit: ${fromUnit} or ${toUnit}`);
         }
-        // Convert to base (m³/day) then to target
-        const valueInBase = value * factors[fromUnit];
+        const valueInBase = value * factors[fromUnit]; // to m³/day
         return valueInBase / factors[toUnit];
       }
-      // For other dimensions, use linear conversion factors
+  
+      // 3) Compressibility
+      else if (dimension === 'compressibility') {
+        const factors = UnitConverter.compressibilityFactors;
+        if (!(fromUnit in factors) || !(toUnit in factors)) {
+          throw new Error(
+            `Unsupported compressibility unit: ${fromUnit} or ${toUnit}`
+          );
+        }
+        const valueInBase = value * factors[fromUnit]; // to base (1/Pa)
+        return valueInBase / factors[toUnit];          // then to target
+      }
+  
+      // 4) Everything else (mass, pressure, length, etc.)
       else {
         let factors: Record<string, number>;
         switch (dimension) {
@@ -192,21 +214,11 @@ class UnitConverter {
             `Unsupported unit conversion from ${fromUnit} to ${toUnit} for dimension ${dimension}`
           );
         }
-        // Convert value to the base unit and then to the target unit
         const valueInBase = value * factors[fromUnit];
         return valueInBase / factors[toUnit];
       }
     }
   }
-  
-  // Example usage:
-  const massInLbs = UnitConverter.convert('mass', 10, 'kg', 'lbm'); // Convert 10 kg to lbm
-  const tempInF = UnitConverter.convert('temperature', 25, '°C', '°F'); // Convert 25 °C to °F
-  const flowInBblDay = UnitConverter.convert('flowrate', 100, 'm³/day', 'bbl/day'); // Convert 100 m³/day to barrels/day
-  
-  console.log(`10 kg = ${massInLbs.toFixed(2)} lbm`);
-  console.log(`25 °C = ${tempInF.toFixed(2)} °F`);
-  console.log(`100 m³/day = ${flowInBblDay.toFixed(2)} bbl/day`);
   
   export default UnitConverter;
   

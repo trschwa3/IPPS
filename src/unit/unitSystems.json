@@ -11,7 +11,8 @@
       "area": "m²",
       "viscosity": "Pa·s",
       "permeability": "m²",
-      "temperature": "K"
+      "temperature": "K",
+      "compressibility":"Pa⁻¹"
     },
     "Imperial": {
       "mass":"lbm",
@@ -25,7 +26,8 @@
       "area": "ft²",
       "viscosity": "lbm/(ft·s)",
       "permeability": "darcy",
-      "temperature": "°F"
+      "temperature": "°F",
+      "compressibility":"psi⁻¹"
     },
     "Oil Field": {
       "mass":"lbm",
@@ -39,7 +41,8 @@
       "area": "acre",
       "viscosity": "cp",
       "permeability": "mD",
-      "temperature": "°F"
+      "temperature": "°F",
+      "compressibility":"psi⁻¹"
     }
   }
   

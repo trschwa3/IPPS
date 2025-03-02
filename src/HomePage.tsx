@@ -3,11 +3,13 @@ import rawUnitSystems from './unit/unitSystems.json';
 import type { UnitSystems, UnitSystemDefinition } from './unit/UnitSystems';
 import CreateCustomUnitSystem from './unit/CreateCustomUnitSystem';
 import './HomePage.css';
+import { useNavigate } from 'react-router-dom';
 
 // Default unit systems imported from JSON
 const defaultUnitSystems = rawUnitSystems as UnitSystems;
 
 const HomePage: React.FC = () => {
+  const navigate = useNavigate();
   const [selectedUnitSystem, setSelectedUnitSystem] = useState<string>('');
   const [selectedApp, setSelectedApp] = useState<string>('');
   // Holds both default and custom systems
@@ -45,7 +47,14 @@ const HomePage: React.FC = () => {
   };
 
   const handleAppChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    setSelectedApp(e.target.value);
+    const app = e.target.value;
+    setSelectedApp(app);
+    if (app === 'nodalAnalysis' && selectedUnitSystem) {
+        navigate('/nodal-analysis', {
+        state: { unitSystem: selectedUnitSystem },
+        });
+    }
+    
   };
 
   const currentUnits = unitSystemsState[selectedUnitSystem as keyof UnitSystems];
@@ -131,15 +140,19 @@ const HomePage: React.FC = () => {
         </section>
       )}
 
-      <section>
+        <section>
         <h2>Select Application Window</h2>
-        <select value={selectedApp} onChange={handleAppChange}>
-          <option value="">-- Choose an application --</option>
-          <option value="reservoirCalculator">Reservoir Calculator</option>
-          <option value="drillingEstimator">Drilling Estimator</option>
-          <option value="productionAnalyzer">Production Analyzer</option>
+        <select
+            value={selectedApp}
+            onChange={handleAppChange}
+            disabled={!selectedUnitSystem} // Disable if no system is selected
+        >
+            <option value="">-- Choose an application --</option>
+            <option value="nodalAnalysis">Nodal Analysis</option>
+            {/* Other apps */}
         </select>
-      </section>
+        </section>
+
 
       <section>
         <p>

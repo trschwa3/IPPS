@@ -11,6 +11,7 @@ export interface UnitSystemDefinition {
     viscosity: string;
     permeability: string;
     temperature: string;
+    compressibility: string;
     // Add any other properties you have
   }
   
