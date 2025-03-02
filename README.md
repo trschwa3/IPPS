@@ -1,54 +1,53 @@
-# React + TypeScript + Vite
+# IPPS (Introductory Petroleum Production Software)
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+**IPPS** is a nascent, open-source project aimed at delivering a suite of petroleum engineering tools in a single platform. It is currently under development and contains several modules to assist with typical reservoir, well, and production engineering tasks.
 
-Currently, two official plugins are available:
+## Overview
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react/README.md) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+The current codebase you see here focuses on **Nodal Analysis** calculations, which help determine well performance given reservoir and wellbore constraints. Specifically, the existing implementation demonstrates how to:
 
-## Expanding the ESLint configuration
+1. **Enter reservoir and fluid properties** (permeability, thickness, viscosity, formation volume factor, etc.).
+2. **Select a flow regime** (e.g., Transient, Pseudosteady-State, Steady-State).
+3. **Compute an Inflow Performance Relationship (IPR)** for **liquid** wells under the chosen regime.
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+The program **converts user inputs** from various unit systems (e.g., Metric, Oil Field) into a canonical "Oil Field" standard before performing flow calculations. A front-end React interface collects these inputs, then draws IPR curves using Chart.js.
 
-```js
-export default tseslint.config({
-  extends: [
-    // Remove ...tseslint.configs.recommended and replace with this
-    ...tseslint.configs.recommendedTypeChecked,
-    // Alternatively, use this for stricter rules
-    ...tseslint.configs.strictTypeChecked,
-    // Optionally, add this for stylistic rules
-    ...tseslint.configs.stylisticTypeChecked,
-  ],
-  languageOptions: {
-    // other options...
-    parserOptions: {
-      project: ['./tsconfig.node.json', './tsconfig.app.json'],
-      tsconfigRootDir: import.meta.dirname,
-    },
-  },
-})
-```
+### Core Capabilities So Far
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+- **IPR Calculations for Liquid Phase**  
+  - **Transient:** Uses a classic equation involving log of time and other parameters.  
+  - **Pseudosteady-State:** Based on standard radial flow equations in a closed reservoir system.  
+  - **Steady-State:** Ideal boundary conditions with constant pressure at the reservoir boundary.
+- **Basic Unit Conversions**  
+  - Permeability (mD vs. other units), length (ft vs. m), pressure (psi vs. bar), viscosity (cp vs. other), and time conversions (hr vs. s), plus partial handling of compressibility.
+- **Front-End Form**  
+  - Dynamically shows or hides relevant input fields depending on the chosen IPR Phase (Liquid, Gas, Two-phase) and Flow Regime.
+- **Charting**  
+  - Renders the IPR curve (with pressure vs. flow rate) using Chart.js.
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+### Next Steps (Roadmap)
 
-export default tseslint.config({
-  plugins: {
-    // Add the react-x and react-dom plugins
-    'react-x': reactX,
-    'react-dom': reactDom,
-  },
-  rules: {
-    // other rules...
-    // Enable its recommended typescript rules
-    ...reactX.configs['recommended-typescript'].rules,
-    ...reactDom.configs.recommended.rules,
-  },
-})
-```
+1. **Complete IPR for Gas and Two-Phase**  
+   The liquid-phase formulas are largely implemented. However, the `calculateGasIPR` and `calculateTwoPhaseIPR` stubs are present but not yet implemented. The next milestone will be to handle gas-dominated and two-phase flow equations for typical reservoir/well conditions.
+
+2. **OPR (Outflow Performance Relationship)**  
+   After the IPR side is robust, we will build the **OPR** module. This will cover wellbore hydraulics, choke models, and vertical lift performance correlations. Once we have both **IPR** and **OPR**, we can fully conduct nodal analyses to determine optimum well conditions under a range of scenarios.
+
+3. **Integrate More Unit Conversions**  
+   We plan to expand the conversion library to handle any additional parameters we encounter. For instance, more advanced fluid property correlations or different user-specified measuring systems.
+
+4. **Refine UI/UX**  
+   - Add better **error handling** and validation for negative or zero input values.  
+   - Provide **tooltips** or interactive explanations for each parameter.
+
+5. **Integration with Other IPPS Modules**  
+   - While **Nodal Analysis** is a significant module, the broader IPPS aims to handle tasks like decline-curve analysis, material balance, PVT calculations, etc. Future releases will incorporate these components into a single user interface.
+
+## How to Run Locally
+
+1. **Clone** the repository.
+2. **Install** dependencies:
+  npm install requirement.txt
+3. **Start** the development server:
+  npm run dev
+4. **Open** the proper localhost url.
