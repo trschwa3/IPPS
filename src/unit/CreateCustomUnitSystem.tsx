@@ -24,6 +24,7 @@ const availableUnits = {
   oilFVF: Object.keys(UnitConverter.oilFVFFactors),
   gasFVF: Object.keys(UnitConverter.gasFVFFactors),
   GOR: Object.keys(UnitConverter.oilFVFFactors),
+  energy: Object.keys(UnitConverter.energyFactors),
   // Temperature is not defined in UnitConverter factors, so list manually:
   temperature: ['K', '°C', '°F', '°R'],
 } as const;
