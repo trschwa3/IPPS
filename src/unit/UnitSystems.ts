@@ -14,7 +14,8 @@ export interface UnitSystemDefinition {
     compressibility: string;
     gasFVF: string,
     oilFVF:string,
-    gor:string
+    gor:string,
+    energy:string
     // Add any other properties you have
   }
   

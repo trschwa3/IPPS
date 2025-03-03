@@ -131,6 +131,12 @@ class UnitConverter {
       "MCF/STB": 1000,
       "m³/m³": 5.618,
     };
+
+    static energyFactors: Record<string, number> = {
+      "J":1,
+      "BTU":0.000947817,
+      "kcal":0.000239006,
+    }
   
     /**
      * Converts a value from one unit to another for a given dimension.

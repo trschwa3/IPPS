@@ -46,7 +46,8 @@ const CreateCustomUnitSystem: React.FC<CreateCustomUnitSystemProps> = ({ onSave,
     compressibility: '',
     gasFVF:'',
     oilFVF:'',
-    gor:''
+    gor:'',
+    energy:''
   });
 
   const handleSystemNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {

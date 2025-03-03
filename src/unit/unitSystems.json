@@ -15,7 +15,8 @@
       "compressibility":"Pa⁻¹",
       "gasFVF":"m³/m³",
       "oilFVF":"m³/m³",
-      "gor":"m³/m³"
+      "gor":"m³/m³",
+      "energy": "J"
     },
     "Imperial": {
       "mass":"lbm",
@@ -33,7 +34,8 @@
       "compressibility":"psi⁻¹",
       "gasFVF":"rcf/scf",
       "oilFVF":"bbl/STB",
-      "gor":"scf/STB"
+      "gor":"scf/STB",
+      "energy": "cal"
     },
     "Oil Field": {
       "mass":"lbm",
@@ -51,7 +53,8 @@
       "compressibility":"psi⁻¹",
       "gasFVF":"rcf/scf",
       "oilFVF":"bbl/STB",
-      "gor":"scf/STB"
+      "gor":"scf/STB",
+      "energy": "BTU"
     }
   }
   
