@@ -42,6 +42,7 @@ class UnitConverter {
       'm³': 1,
       'ft³': 0.0283168466,
       bbl: 0.158987,
+      STB: 0.158987,
       gal: 0.00378541,
       L: 0.001,
       'Mm³':1000,
@@ -52,6 +53,7 @@ class UnitConverter {
     // Density (base: kg/m³)
     static densityFactors: Record<string, number> = {
       'kg/m³': 1,
+      'g/cm³': 1000,
       'lbm/ft³': 16.0184634,
       'lbm/gal': 119.826,
     };

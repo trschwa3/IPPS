@@ -51,7 +51,7 @@
       "compressibility":"psi⁻¹",
       "gasFVF":"rcf/scf",
       "oilFVF":"bbl/STB",
-      "gor":"MCF/STB"
+      "gor":"scf/STB"
     }
   }
   
