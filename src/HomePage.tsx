@@ -1,9 +1,13 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import rawUnitSystems from './unit/unitSystems.json';
 import type { UnitSystems, UnitSystemDefinition } from './unit/UnitSystems';
 import CreateCustomUnitSystem from './unit/CreateCustomUnitSystem';
 import './HomePage.css';
-import { useNavigate } from 'react-router-dom';
+
+import euFlag from "./Images/flags/eu.svg";
+import ukFlag from "./Images/flags/gb.svg";
+import usFlag from "./Images/flags/us.svg";
 
 // Default unit systems imported from JSON
 const defaultUnitSystems = rawUnitSystems as unknown as UnitSystems;
@@ -50,11 +54,10 @@ const HomePage: React.FC = () => {
     const app = e.target.value;
     setSelectedApp(app);
     if (app === 'nodalAnalysis' && selectedUnitSystem) {
-        navigate('/nodal-analysis', {
+      navigate('/nodal-analysis', {
         state: { unitSystem: selectedUnitSystem },
-        });
+      });
     }
-    
   };
 
   const currentUnits = unitSystemsState[selectedUnitSystem as keyof UnitSystems];
@@ -80,6 +83,18 @@ const HomePage: React.FC = () => {
     }
   };
 
+  // Helper to return the correct flag image (if any) for the default systems
+  const getFlagForSystem = (systemName: string): { src?: string; alt?: string } => {
+    if (systemName === 'SI') {
+      return { src: euFlag, alt: 'EU Flag' };
+    } else if (systemName === 'Imperial') {
+      return { src: ukFlag, alt: 'UK Flag' };
+    } else if (systemName === 'Oil Field') {
+      return { src: usFlag, alt: 'US Flag' };
+    }
+    return {};
+  };
+
   return (
     <div className="container">
       <h1>Welcome to IPPS</h1>
@@ -99,18 +114,29 @@ const HomePage: React.FC = () => {
       {/* Render default unit systems */}
       <section>
         <h2>Default Unit Systems</h2>
-        {defaultSystemKeys.map((systemName) => (
-          <label key={systemName} style={{ marginRight: '1rem' }}>
-            <input
-              type="radio"
-              name="unitSystem"
-              value={systemName}
-              checked={selectedUnitSystem === systemName}
-              onChange={handleUnitChange}
-            />
-            {systemName}
-          </label>
-        ))}
+        {defaultSystemKeys.map((systemName) => {
+          const { src, alt } = getFlagForSystem(systemName);
+          return (
+            <label key={systemName} style={{ marginRight: '1rem' }}>
+              <input
+                type="radio"
+                name="unitSystem"
+                value={systemName}
+                checked={selectedUnitSystem === systemName}
+                onChange={handleUnitChange}
+              />
+              {/* If there's a flag for this system, display it */}
+              {src && (
+                <img
+                  src={src}
+                  alt={alt}
+                  style={{ width: '24px', marginLeft: '0.5rem', marginRight: '0.25rem' }}
+                />
+              )}
+              {systemName}
+            </label>
+          );
+        })}
       </section>
 
       {/* Render custom unit systems if any exist */}
@@ -140,19 +166,18 @@ const HomePage: React.FC = () => {
         </section>
       )}
 
-        <section>
+      <section>
         <h2>Select Application Window</h2>
         <select
-            value={selectedApp}
-            onChange={handleAppChange}
-            disabled={!selectedUnitSystem} // Disable if no system is selected
+          value={selectedApp}
+          onChange={handleAppChange}
+          disabled={!selectedUnitSystem} // Disable if no system is selected
         >
-            <option value="">-- Choose an application --</option>
-            <option value="nodalAnalysis">Nodal Analysis</option>
-            {/* Other apps */}
+          <option value="">-- Choose an application --</option>
+          <option value="nodalAnalysis">Nodal Analysis</option>
+          {/* Other apps */}
         </select>
-        </section>
-
+      </section>
 
       <section>
         <p>
