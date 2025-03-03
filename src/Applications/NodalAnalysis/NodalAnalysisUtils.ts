@@ -220,11 +220,11 @@ export function calculateIPR(params: any, iprPhase: string, flowRegime: string) 
   }
   
   // Gas and Two-phase stubs
-  function calculateGasIPR(params: any) {
+  function calculateGasIPR(_params: any) {
     // ...
     return [];
   }
-  function calculateTwoPhaseIPR(params: any) {
+  function calculateTwoPhaseIPR(_params: any) {
     // ...
     return [];
   }

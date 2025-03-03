@@ -1,7 +1,3 @@
-// src/Correlations/OilCorrelations.ts
-// This file contains oil property correlations (oil density, FVF, compressibility, gas–oil ratio, oil viscosity, and surface tension)
-// Adapted from VBA code.
-
 const Patm = 14.7;
 const Tabsolut = 310; // used in correlations (e.g., ASTM)
 const waterDensStd = 0.999012; // g/cc for water at standard conditions
@@ -9,7 +5,7 @@ const airDensStd = 0.0765;     // lbm/ft³ for air at standard conditions
 const cfBbl = 5.615;          // conversion factor
 
 export class CrudeOilCorrelations {
-    static Patm = 14.7;
+  static Patm = 14.7;
   // *********************
   // Basic Oil Property Correlations
   // *********************
@@ -217,12 +213,12 @@ export class CrudeOilCorrelations {
   }
 
   // Stub: returns a dummy value for gas specific gravity at standard conditions
-  static gas_Sg_100(API: number, Sg_g: number, Psep: number, Tsep: number): number {
+  static gas_Sg_100(_API: number, _Sg_g: number, _Psep: number, _Tsep: number): number {
     return 0.8;
   }
 
   // Stub: returns a dummy saturation pressure (psia)
-  static P_saturation(T: number, API: number, Sg_g: number, Rso: number, method: number): number {
+  static P_saturation(_T: number, _API: number, _Sg_g: number, _Rso: number, _method: number): number {
     return 1000;
   }
 
@@ -239,25 +235,25 @@ export class CrudeOilCorrelations {
     T2?: number,
     oilVisc2?: number
   ): number {
-    let A: number, b: number, c: number;
+    let b: number, c: number;
     switch (method) {
       case 0: // Beal
-        A = 0.32 + 18000000 / Math.pow(10, Math.log10(API) * 4.53);
+        const A_beal = 0.32 + 18000000 / Math.pow(10, Math.log10(API) * 4.53);
         b = 360 / (T + 200);
         c = Math.pow(10, 0.43 + 8.33 / API);
-        return A * Math.pow(b, c);
+        return A_beal * Math.pow(b, c);
       case 1: // Glaso
-        A = 31410000000 * Math.pow(10, Math.log10(T) * (-3.444));
+        const A_glaso = 31410000000 * Math.pow(10, Math.log10(T) * (-3.444));
         b = 10.313 * Math.log10(T) - 36.447;
-        return A * Math.pow(Math.log10(API), b);
+        return A_glaso * Math.pow(Math.log10(API), b);
       case 2: // Beggs & Robinson
-        A = 3.0324 - 0.02023 * API;
-        b = Math.pow(10, A);
+        const A_BR = 3.0324 - 0.02023 * API;
+        b = Math.pow(10, A_BR);
         c = b * Math.pow(T, -1.163);
         return Math.pow(10, c) - 1;
       case 3: // Beggs & Robinson modified
-        A = 1.8653 - 0.025086 * API;
-        b = Math.pow(10, A);
+        const A_BRm = 1.8653 - 0.025086 * API;
+        b = Math.pow(10, A_BRm);
         c = b * Math.pow(T, -0.5644);
         return Math.pow(10, c) - 1;
       case 4: // Bergman method (requires T1, oilVisc1, T2, oilVisc2)
@@ -265,8 +261,8 @@ export class CrudeOilCorrelations {
           throw new Error("Bergman method requires T1, oilVisc1, T2, and oilVisc2.");
         }
         b = (Math.log(Math.log(oilVisc2 + 1)) - Math.log(Math.log(oilVisc1 + 1))) / (Math.log(T2 + 310) - Math.log(T1 + 310));
-        A = Math.log(Math.log(oilVisc1 + 1)) - b * Math.log(T1 + 310);
-        return Math.exp(Math.exp(A + b * Math.log(T + 310))) - 1;
+        const A_berg = Math.log(Math.log(oilVisc1 + 1)) - b * Math.log(T1 + 310);
+        return Math.exp(Math.exp(A_berg + b * Math.log(T + 310))) - 1;
       case 5: // Bergman & Sutton
         return this.oil_visc_std_BS(T, API);
       case 6: // ASTM
@@ -280,60 +276,56 @@ export class CrudeOilCorrelations {
   }
 
   static oil_visc_std_BS(T: number, API: number): number {
-    let A: number, b: number, Sg_o: number, oil_dens_STD: number, oil_dens_T: number, alfa60: number, VCF: number, Kw: number, Mo: number, aux: number;
-    let Tb: number, alfa: number, v1: number, v2: number, v100: number, v210: number, deltaSg: number, Sg_o_o: number, abs_x: number, F1: number, F2: number;
-    let oilvis_100: number, oildens_100: number, oilvis_210: number, oildens_210: number;
-    
+    let b: number, Sg_o: number, oil_dens_STD: number, alfa60: number, VCF: number, Kw: number, Mo: number, aux: number;
     Sg_o = this.Sg_API(API);
     oil_dens_STD = 0.999012 * Sg_o;
     alfa60 = 0.0003410957 / Math.pow(oil_dens_STD, 2);
     alfa60 = (0.00025042 + 0.00008302 * oil_dens_STD) / Math.pow(oil_dens_STD, 2);
     VCF = Math.exp(-alfa60 * (T - 60) * (1 + 0.8 * alfa60 * (T - 60)));
-    oil_dens_T = oil_dens_STD * VCF;
     Mo = 798.09426 / Math.exp(0.03165 * API);
     Kw = 4.5579 * Math.pow(Mo, 0.15178) * Math.pow(Sg_o, -0.84573);
     Kw = Math.pow(16.80642 * Math.exp(0.00016514 * Mo + 1.4103 * Sg_o - 0.00075152 * Mo * Sg_o) * Math.pow(Mo, 0.5369) * Math.pow(Sg_o, -0.7276), 0.3333) / Sg_o;
     Kw = Math.pow(2012.84 * Math.exp(-0.0018519 * Mo - 3.70833 * Sg_o + 0.00131441 * Mo * Sg_o) * Math.pow(Mo, 0.589485) * Math.pow(Sg_o, 3.36211), 0.3333) / Sg_o;
-    Tb = Math.pow(Sg_o * Kw, 3);
-    alfa = 1 - (0.533272 + 1.91017e-4 * Tb + 7.79681e-8 * Math.pow(Tb, 2) - 2.84376e-11 * Math.pow(Tb, 3) + 9.59468e27 * Math.pow(Tb, -13));
+    const Tb = Math.pow(Sg_o * Kw, 3);
+    const alfa = 1 - (0.533272 + 1.91017e-4 * Tb + 7.79681e-8 * Math.pow(Tb, 2) - 2.84376e-11 * Math.pow(Tb, 3) + 9.59468e27 * Math.pow(Tb, -13));
     aux = 2.40219 - 9.59688 * alfa + 3.45656 * Math.pow(alfa, 2) - 143.632 * Math.pow(alfa, 4);
-    v2 = Math.exp(aux) + 0.152995;
-    v1 = Math.exp(0.701254 + 1.38359 * Math.log(v2) + 0.103604 * Math.pow(Math.log(v2), 2));
-    Sg_o_o = 0.843593 - 0.128624 * alfa - 3.36159 * Math.pow(alfa, 3) - 13749.5 * Math.pow(alfa, 12);
-    deltaSg = Sg_o - Sg_o_o;
-    abs_x = Math.abs(2.68316 - 62.0863 / Math.pow(Tb, 0.5));
-    F2 = abs_x * deltaSg - 47.6033 * Math.pow(deltaSg, 2) / Math.pow(Tb, 0.5);
+    const v2 = Math.exp(aux) + 0.152995;
+    const v1 = Math.exp(0.701254 + 1.38359 * Math.log(v2) + 0.103604 * Math.pow(Math.log(v2), 2));
+    const Sg_o_o = 0.843593 - 0.128624 * alfa - 3.36159 * Math.pow(alfa, 3) - 13749.5 * Math.pow(alfa, 12);
+    const deltaSg = Sg_o - Sg_o_o;
+    const abs_x = Math.abs(2.68316 - 62.0863 / Math.pow(Tb, 0.5));
+    const F2 = abs_x * deltaSg - 47.6033 * Math.pow(deltaSg, 2) / Math.pow(Tb, 0.5);
     aux = Math.log(v2 + 232.442 / Tb) * Math.pow((1 + 2 * F2) / (1 - 2 * F2), 2);
-    v210 = Math.exp(aux) - 232.442 / Tb;
-    F1 = 0.980633 * abs_x * deltaSg - 47.6033 * Math.pow(deltaSg, 2) / Math.pow(Tb, 0.5);
+    const v210 = Math.exp(aux) - 232.442 / Tb;
+    const F1 = 0.980633 * abs_x * deltaSg - 47.6033 * Math.pow(deltaSg, 2) / Math.pow(Tb, 0.5);
     aux = Math.log(v1 + 232.442 / Tb) * Math.pow((1 + 2 * F1) / (1 - 2 * F1), 2);
-    v100 = Math.exp(aux) - 232.442 / Tb;
+    const v100 = Math.exp(aux) - 232.442 / Tb;
     VCF = Math.exp(-alfa60 * (100 - 60) * (1 + 0.8 * alfa60 * (100 - 60)));
-    oildens_100 = 0.999012 * Sg_o * VCF;
-    oilvis_100 = v100 * oildens_100;
+    const oildens_100 = 0.999012 * Sg_o * VCF;
+    const oilvis_100 = v100 * oildens_100;
     VCF = Math.exp(-alfa60 * (210 - 60) * (1 + 0.8 * alfa60 * (210 - 60)));
-    oildens_210 = 0.999012 * Sg_o * VCF;
-    oilvis_210 = v210 * oildens_210;
+    const oildens_210 = 0.999012 * Sg_o * VCF;
+    const oilvis_210 = v210 * oildens_210;
     b = (Math.log(Math.log(oilvis_210 + 1)) - Math.log(Math.log(oilvis_100 + 1))) / (Math.log(520) - Math.log(410));
     return Math.exp(Math.exp(Math.log(Math.log(oilvis_100 + 1)) + b * (Math.log(T + 310) - Math.log(410)))) - 1;
   }
 
   static oil_visc_std_ASTM(T: number, API: number, T1: number, oilVisc1: number, T2: number, oilVisc2: number): number {
-    let A: number, b: number, ZT: number, ZT1: number, ZT2: number, k_vis: number;
-    let Sg_o: number, oil_dens_STD: number, oil_dens_T: number, alfa60: number, VCF: number;
+    let b: number, ZT: number, ZT1: number, ZT2: number, k_vis: number;
+    let Sg_o: number, oil_dens_STD: number, alfa60: number, VCF: number;
     Sg_o = this.Sg_API(API);
     oil_dens_STD = 0.999012 * Sg_o;
     alfa60 = 0.0003410957 / Math.pow(oil_dens_STD, 2);
     alfa60 = (0.00025042 + 0.00008302 * oil_dens_STD) / Math.pow(oil_dens_STD, 2);
     VCF = Math.exp(-alfa60 * (T - 60) * (1 + 0.8 * alfa60 * (T - 60)));
-    oil_dens_T = oil_dens_STD * VCF;
+    const oil_dens_T = oil_dens_STD * VCF;
     k_vis = oilVisc1 / oil_dens_T;
     ZT1 = k_vis + 0.7 + Math.exp(-1.47 - 1.84 * k_vis - 0.51 * k_vis * k_vis);
     k_vis = oilVisc2 / oil_dens_T;
     ZT2 = k_vis + 0.7 + Math.exp(-1.47 - 1.84 * k_vis - 0.51 * k_vis * k_vis);
     b = (Math.log(Math.log(ZT2)) - Math.log(Math.log(ZT1))) / (Math.log(T2 + Tabsolut) - Math.log(T1 + Tabsolut));
-    A = (Math.log(Math.log(ZT1)) - b * Math.log(T1 + Tabsolut) + Math.log(Math.log(ZT2)) - b * Math.log(T2 + Tabsolut)) / 2;
-    ZT = Math.exp(Math.exp(A + b * Math.log(T + Tabsolut)));
+    const A_avg = (Math.log(Math.log(ZT1)) - b * Math.log(T1 + Tabsolut) + Math.log(Math.log(ZT2)) - b * Math.log(T2 + Tabsolut)) / 2;
+    ZT = Math.exp(Math.exp(A_avg + b * Math.log(T + Tabsolut)));
     k_vis = ZT - 0.7 - Math.exp(-0.7487 - 3.295 * (ZT - 0.7) + 0.6119 * Math.pow(ZT - 0.7, 2) - 0.3193 * Math.pow(ZT - 0.7, 3));
     return k_vis * oil_dens_T;
   }
@@ -365,8 +357,8 @@ export class CrudeOilCorrelations {
       throw new Error("Unsupported method for saturated viscosity.");
     }
   }
-
-  static oil_surft(P: number, T: number, API: number, method: number = 0): number {
+  
+  static oil_surft(P: number, T: number, API: number, _method: number = 0): number {
     let surft_atm68F: number, surft_atm100F: number, factor: number;
     const xpressure = [0, 200, 400, 600, 1000, 1400, 2200, 2800];
     const yfactor = [100, 86, 73, 63, 48, 37, 20, 12];
@@ -428,7 +420,6 @@ export class CrudeOilCorrelations {
   // ================================
   // End Oil Viscosity Correlations
   // ================================
-
 }
 
 export const TabsolutConst = Tabsolut;
