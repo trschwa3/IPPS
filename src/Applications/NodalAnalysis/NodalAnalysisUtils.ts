@@ -2,24 +2,26 @@ export function calculateIPR(params: any, iprPhase: string, flowRegime: string) 
     if (iprPhase === 'Liquid') {
       switch (flowRegime) {
         case 'Transient':
-          return calculateTransientIPR(params);
+          return oil_calculateTransientIPR(params);
         case 'Pseudosteady-State':
-          return calculatePseudosteadyIPR(params);
+          return oil_calculatePseudosteadyIPR(params);
         case 'Steady-State':
-          return calculateSteadyStateIPR(params);
+          return oil_calculateSteadyStateIPR(params);
         default:
           return [];
       }
     } else if (iprPhase === 'Gas') {
       return calculateGasIPR(params);
     } else if (iprPhase === 'Two-phase') {
-      return calculateTwoPhaseIPR(params);
-    }
+      switch (flowRegime) {
+        case "Pseudosteady-State":
+          return two_calculatePseudosteadyIPR(params);
+    }}
     return [];
   }
   
   // For Transient
-  function calculateTransientIPR({
+  function oil_calculateTransientIPR({
     k,
     h,
     Bo,
@@ -93,7 +95,7 @@ export function calculateIPR(params: any, iprPhase: string, flowRegime: string) 
   }
   
   // Pseudosteady example
-  function calculatePseudosteadyIPR({
+  function oil_calculatePseudosteadyIPR({
     k,
     h,
     Bo,
@@ -157,7 +159,7 @@ export function calculateIPR(params: any, iprPhase: string, flowRegime: string) 
   }
   
   // Steady example
-  function calculateSteadyStateIPR({
+  function oil_calculateSteadyStateIPR({
     k,
     h,
     Bo,
@@ -224,8 +226,113 @@ export function calculateIPR(params: any, iprPhase: string, flowRegime: string) 
     // ...
     return [];
   }
-  function calculateTwoPhaseIPR(_params: any) {
-    // ...
-    return [];
+  function two_calculatePseudosteadyIPR({
+    k,
+    h,
+    Bo,
+    muo,
+    s,
+    pavg,
+    pb,   // Bubble point / saturation pressure (assumed to be in psi, or converted beforehand)
+    re,
+    rw,
+    spacingMethod,
+    spacingValue,
+  }: any) {
+    /*
+      Two-phase pseudo-steady IPR:
+        J = (k * h) / (141.2 * Bo * muo) / [ ln(re/rw) - 0.75 + s ]
+        
+        For p_wf >= pb (above bubble point):
+           q = J * (pavg - p_wf)
+        For p_wf < pb (below bubble point, Vogel region):
+           q = q_bubble + q_vmax * (1 - 0.2*(p_wf/pb) - 0.8*(p_wf/pb)^2)
+        where:
+           q_bubble = J*(pavg - pb)
+           q_vmax = q_bubble / 1.8
+    */
+  
+    const points: { p_wf: number; q_o: number }[] = [];
+    const method = spacingMethod || '';
+    const val = spacingValue || 0;
+    const defaultN = 25;
+  
+    // Calculate productivity index
+    const denom = Math.log(re / rw) - 0.75 + s;
+    const J = (k * h) / (141.2 * Bo * muo) / denom;
+  
+    // Calculate flow at bubble point and Vogel's maximum extra flow
+    const q_bubble = J * (pavg - pb);
+    const q_vmax = q_bubble / 1.8;
+  
+    // Helper function to calculate q for a given p_wf (piecewise)
+    function getFlow(p_wf: number): number {
+      if (p_wf >= pb) {
+        return J * (pavg - p_wf);
+      } else {
+        return q_bubble + q_vmax * (1 - 0.2 * (p_wf / pb) - 0.8 * Math.pow(p_wf / pb, 2));
+      }
+    }
+  
+    // Here we implement the "NumPoints" approach (the default) similar to oil_calculatePseudosteadyIPR
+    if (method === 'NumPoints' || method === '') {
+      const N = val > 0 ? val : defaultN;
+      for (let i = 0; i < N; i++) {
+        // For two-phase, you might choose p_wf from pavg down to a minimum of 0
+        const frac = i / (N - 1);
+        const p_wf = pavg * (1 - frac); // Linear spacing from pavg to 0
+        const q_o = getFlow(p_wf);
+        points.push({ p_wf, q_o });
+      }
+      return points;
+    } else if (method === 'DeltaP') {
+      const deltaP = val > 0 ? val : 100;
+      let p_wf = pavg;
+      while (p_wf >= 0) {
+        points.push({ p_wf, q_o: getFlow(p_wf) });
+        p_wf -= deltaP;
+      }
+      return points;
+    } else if (method === 'DeltaQ') {
+      // DeltaQ method: step in flow increments and invert the piecewise function.
+      // (See previous implementation for the inversion logic.)
+      const dq = val > 0 ? val : 50;
+      const q_singleMax = J * pavg;
+      const q_vogelMax = q_bubble + q_vmax;
+      const qMax = Math.max(q_singleMax, q_vogelMax);
+      
+      // Use a helper that inverts q->p_wf (see previous code)
+      function invertFlow(q: number): number | null {
+        // Check single-phase inversion first:
+        const p_wf_single = pavg - q / J;
+        if (pavg > pb && p_wf_single >= pb) {
+          return p_wf_single;
+        }
+        // Otherwise, solve the Vogel quadratic:
+        // q - q_bubble = q_vmax * [1 - 0.2*x - 0.8*x^2], where x = p_wf/pb.
+        const A = 0.8;
+        const B = 0.2;
+        const C = (q - q_bubble) / q_vmax - 1;
+        const discriminant = B * B - 4 * A * C;
+        if (discriminant < 0) return null;
+        const sqrtD = Math.sqrt(discriminant);
+        const x1 = (-B + sqrtD) / (2 * A);
+        const x2 = (-B - sqrtD) / (2 * A);
+        const candidates = [x1, x2].filter((x) => x >= 0 && x <= 1);
+        if (candidates.length === 0) return null;
+        const x = Math.max(...candidates);
+        return x * pb;
+      }
+  
+      for (let q = 0; q <= qMax; q += dq) {
+        const p_wf = invertFlow(q);
+        if (p_wf !== null) {
+          points.push({ q_o: q, p_wf });
+        }
+      }
+      return points;
+    } else {
+      return points;
+    }
   }
   

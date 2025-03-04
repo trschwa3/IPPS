@@ -22,7 +22,7 @@ const NodalAnalysisForm: React.FC<NodalAnalysisFormProps> = ({
   onCalculate,
   selectedUnitSystem,
 }) => {
-  const phaseOptions = ['Liquid', 'Two-phase', 'Gas'];
+  const gas_oil_phaseOptions = ['Liquid', 'Two-phase', 'Gas'];
   const regimeOptions = ['Transient', 'Pseudosteady-State', 'Steady-State'];
   const spacingMethods = ['NumPoints', 'DeltaP', 'DeltaQ'];
 
@@ -78,8 +78,7 @@ const NodalAnalysisForm: React.FC<NodalAnalysisFormProps> = ({
     color: '#666',
   };
 
-  // Common reservoir parameters that apply to all flow regimes
-  // (We have removed porosity (phi) and c_t from here, so they only show in Transient)
+  // Common reservoir parameters that apply to all flow regimes for single phase oil
   const commonFields = [
     { name: 'k',   label: 'Permeability, k',     unit: userUnits.permeability || 'mD' },
     { name: 'h',   label: 'Thickness, h',       unit: userUnits.length || 'ft' },
@@ -103,29 +102,35 @@ const NodalAnalysisForm: React.FC<NodalAnalysisFormProps> = ({
           style={inputStyle}
         >
           <option value="">-- Select --</option>
-          {phaseOptions.map((p) => (
+          {gas_oil_phaseOptions.map((p) => (
             <option key={p} value={p}>{p}</option>
           ))}
         </select>
       </div>
 
-      {/* Flow Regime (only if Liquid selected) */}
-      {iprPhase === 'Liquid' && (
+      {/* Flow Regime (if Liquid or Two-phase is selected) */}
+      {(iprPhase === 'Liquid' || iprPhase === 'Two-phase') && (
         <div style={rowStyle}>
           <label style={labelStyle}>Flow Regime:</label>
           <select
             name="flowRegime"
-            value={flowRegime}
+            value={iprPhase === 'Two-phase' ? 'Pseudosteady-State' : flowRegime}
             onChange={handleTextChange}
             style={inputStyle}
+            disabled={iprPhase === 'Two-phase'} // force pseudosteady-state for two-phase
           >
-            <option value="">-- Select --</option>
-            {regimeOptions.map((r) => (
-              <option key={r} value={r}>{r}</option>
-            ))}
+            {iprPhase === 'Liquid'
+              ? <>
+                  <option value="">-- Select --</option>
+                  {regimeOptions.map((r) => (
+                    <option key={r} value={r}>{r}</option>
+                  ))}
+                </>
+              : <option value="Pseudosteady-State">Pseudosteady-State</option>}
           </select>
         </div>
       )}
+
 
       {/* Common fields */}
       {commonFields.map((field) => (
@@ -209,8 +214,8 @@ const NodalAnalysisForm: React.FC<NodalAnalysisFormProps> = ({
         </>
       )}
 
-      {/* Pseudosteady Only */}
-      {iprPhase === 'Liquid' && flowRegime === 'Pseudosteady-State' && (
+      {/* Pseudosteady-State Fields (for Liquid pseudosteady-state OR Two-phase) */}
+      {((iprPhase === 'Liquid' && flowRegime === 'Pseudosteady-State') || iprPhase === 'Two-phase') && (
         <>
           <div style={rowStyle}>
             <label style={labelStyle}>
@@ -247,8 +252,30 @@ const NodalAnalysisForm: React.FC<NodalAnalysisFormProps> = ({
               ({userUnits.length || 'ft'})
             </span>
           </div>
+
+          {/* New field for Two-phase: Saturation Pressure (Bubble Point) */}
+          {iprPhase === 'Two-phase' && (
+            <div style={rowStyle}>
+              <label style={labelStyle}>
+                Saturation Pressure, p<sub>b</sub>:
+              </label>
+              <input
+                type="number"
+                step="any"
+                name="pb"
+                value={formValues.pb || ''}
+                onChange={handleNumericChange}
+                disabled={!canEditFields}
+                style={inputStyle}
+              />
+              <span style={unitStyle}>
+                ({userUnits.pressure || 'psi'})
+              </span>
+            </div>
+          )}
         </>
       )}
+
 
       {/* Steady Only */}
       {iprPhase === 'Liquid' && flowRegime === 'Steady-State' && (
