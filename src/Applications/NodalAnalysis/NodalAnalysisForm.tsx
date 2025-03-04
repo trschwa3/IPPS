@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import unitSystems from '../../unit/unitSystems.json';
 
 interface NodalAnalysisFormProps {
@@ -22,6 +22,13 @@ const NodalAnalysisForm: React.FC<NodalAnalysisFormProps> = ({
   onCalculate,
   selectedUnitSystem,
 }) => {
+  
+  useEffect(() => {
+    if (iprPhase === 'Two-phase' && flowRegime !== 'Pseudosteady-State') {
+      setFlowRegime('Pseudosteady-State');
+    }
+  }, [iprPhase, flowRegime, setFlowRegime]);
+  
   const gas_oil_phaseOptions = ['Liquid', 'Two-phase', 'Gas'];
   const regimeOptions = ['Transient', 'Pseudosteady-State', 'Steady-State'];
   const spacingMethods = ['NumPoints', 'DeltaP', 'DeltaQ'];
@@ -36,12 +43,18 @@ const NodalAnalysisForm: React.FC<NodalAnalysisFormProps> = ({
   /** Reusable numeric input handler */
   const handleNumericChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
-    const parsed = parseFloat(value);
+    let parsed = parseFloat(value);
+    // For saturation pressure, if empty, use a default (e.g. pavg or a fixed value)
+    if (name === 'pb' && isNaN(parsed)) {
+      // Option 1: Default pb to pavg (if pavg exists) or a typical value
+      parsed = formValues.pavg || 3000; // example: 3000 psi
+    }
     setFormValues((prev: any) => ({
       ...prev,
-      [name]: isNaN(parsed) ? 0 : parsed,
+      [name]: parsed,
     }));
   };
+  
 
   /** Reusable select/text input handler */
   const handleTextChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
