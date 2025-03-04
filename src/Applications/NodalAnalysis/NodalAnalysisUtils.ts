@@ -233,7 +233,7 @@ export function calculateIPR(params: any, iprPhase: string, flowRegime: string) 
     muo,
     s,
     pavg,
-    pb,   // Bubble point / saturation pressure (assumed to be in psi, or converted beforehand)
+    pb,   // Bubble point / saturation pressure (assumed already in psi)
     re,
     rw,
     spacingMethod,
@@ -250,6 +250,9 @@ export function calculateIPR(params: any, iprPhase: string, flowRegime: string) 
         where:
            q_bubble = J*(pavg - pb)
            q_vmax = q_bubble / 1.8
+  
+      In the saturated case (pavg ≤ pb) we use a pure Vogel:
+           q = (J * pavg / 1.8) * [1 - 0.2*(p_wf/pavg) - 0.8*(p_wf/pavg)^2]
     */
   
     const points: { p_wf: number; q_o: number }[] = [];
@@ -261,26 +264,100 @@ export function calculateIPR(params: any, iprPhase: string, flowRegime: string) 
     const denom = Math.log(re / rw) - 0.75 + s;
     const J = (k * h) / (141.2 * Bo * muo) / denom;
   
-    // Calculate flow at bubble point and Vogel's maximum extra flow
+    // For pavg > pb, define q_bubble and q_vmax.
     const q_bubble = J * (pavg - pb);
     const q_vmax = q_bubble / 1.8;
   
-    // Helper function to calculate q for a given p_wf (piecewise)
+    // Piecewise function (same for both NumPoints and DeltaQ)
     function getFlow(p_wf: number): number {
-      if (p_wf >= pb) {
-        return J * (pavg - p_wf);
+      if (pavg <= pb) {
+        // Entire reservoir below bubble point:
+        return (J * pavg / 1.8) * (1 - 0.2 * (p_wf / pavg) - 0.8 * Math.pow(p_wf / pavg, 2));
       } else {
-        return q_bubble + q_vmax * (1 - 0.2 * (p_wf / pb) - 0.8 * Math.pow(p_wf / pb, 2));
+        // pavg > pb:
+        if (p_wf >= pb) {
+          // Single-phase Darcy region:
+          return J * (pavg - p_wf);
+        } else {
+          // Two-phase (Vogel) region:
+          return J * (pavg - pb) + (J * pb / 1.8) * (1 - 0.2 * (p_wf / pb) - 0.8 * Math.pow(p_wf / pb, 2));
+        }
       }
     }
   
-    // Here we implement the "NumPoints" approach (the default) similar to oil_calculatePseudosteadyIPR
-    if (method === 'NumPoints' || method === '') {
+    // DeltaQ inversion function
+    function invertFlow(q: number): number | null {
+      if (pavg <= pb) {
+        // Saturated: invert q = (J*pavg/1.8) * [1 - 0.2*x - 0.8*x^2] where x = p_wf/pavg.
+        const A_sat = J * pavg / 1.8;
+        // Rearranged quadratic: 0.8*x^2 + 0.2*x + (q/A_sat - 1) = 0.
+        const A_coef = 0.8;
+        const B_coef = 0.2;
+        const C_coef = (q / A_sat) - 1;
+        const disc = B_coef * B_coef - 4 * A_coef * C_coef;
+        if (disc < 0) return null;
+        const sqrtDisc = Math.sqrt(disc);
+        const x1 = (-B_coef + sqrtDisc) / (2 * A_coef);
+        const x2 = (-B_coef - sqrtDisc) / (2 * A_coef);
+        const candidates = [x1, x2].filter(x => x >= 0 && x <= 1);
+        if (candidates.length === 0) return null;
+        const x = Math.max(...candidates);
+        return x * pavg;
+      } else {
+        // pavg > pb: first check if the flow falls in the single-phase (Darcy) region.
+        const p_wf_single = pavg - q / J;
+        if (p_wf_single >= pb) {
+          return p_wf_single;
+        }
+        // Otherwise, in the two-phase (Vogel) region.
+        // In this region: q = J*(pavg - pb) + (J*pb/1.8)*[1 - 0.2*(p_wf/pb) - 0.8*(p_wf/pb)^2].
+        const Q_offset = J * (pavg - pb);
+        const A_vog = J * pb / 1.8;
+        // Solve: 0.8*x^2 + 0.2*x + ((q - Q_offset)/A_vog - 1) = 0, where x = p_wf / pb.
+        const A_coef = 0.8;
+        const B_coef = 0.2;
+        const C_coef = ((q - Q_offset) / A_vog) - 1;
+        const disc = B_coef * B_coef - 4 * A_coef * C_coef;
+        if (disc < 0) return null;
+        const sqrtDisc = Math.sqrt(disc);
+        const x1 = (-B_coef + sqrtDisc) / (2 * A_coef);
+        const x2 = (-B_coef - sqrtDisc) / (2 * A_coef);
+        const candidates = [x1, x2].filter(x => x >= 0 && x <= 1);
+        if (candidates.length === 0) return null;
+        const x = Math.max(...candidates);
+        return x * pb;
+      }
+    }
+  
+    // DeltaQ branch: step in flow increments (q) and invert to get p_wf.
+    if (method === 'DeltaQ') {
+      const dq = val > 0 ? val : 50;
+      let qMax: number;
+      if (pavg <= pb) {
+        // Saturated case: maximum flow occurs at p_wf = 0.
+        qMax = (J * pavg) / 1.8;  // because getFlow(0) = J*pavg/1.8.
+      } else {
+        // For pavg > pb, maximum flow in single-phase is J*pavg, while in Vogel region it's q_bubble + q_vmax.
+        const q_singleMax = J * pavg;
+        const q_vogelMax = q_bubble + q_vmax;
+        qMax = Math.max(q_singleMax, q_vogelMax);
+      }
+      
+      for (let q = 0; q <= qMax; q += dq) {
+        const p_wf = invertFlow(q);
+        if (p_wf !== null) {
+          points.push({ q_o: q, p_wf });
+        }
+      }
+      return points;
+    }
+    // For NumPoints (or default) and DeltaP, use the forward approach.
+    else if (method === 'NumPoints' || method === '') {
       const N = val > 0 ? val : defaultN;
       for (let i = 0; i < N; i++) {
-        // For two-phase, you might choose p_wf from pavg down to a minimum of 0
         const frac = i / (N - 1);
-        const p_wf = pavg * (1 - frac); // Linear spacing from pavg to 0
+        // For two-phase, span p_wf from pavg down to 0.
+        const p_wf = pavg * (1 - frac);
         const q_o = getFlow(p_wf);
         points.push({ p_wf, q_o });
       }
@@ -293,46 +370,9 @@ export function calculateIPR(params: any, iprPhase: string, flowRegime: string) 
         p_wf -= deltaP;
       }
       return points;
-    } else if (method === 'DeltaQ') {
-      // DeltaQ method: step in flow increments and invert the piecewise function.
-      // (See previous implementation for the inversion logic.)
-      const dq = val > 0 ? val : 50;
-      const q_singleMax = J * pavg;
-      const q_vogelMax = q_bubble + q_vmax;
-      const qMax = Math.max(q_singleMax, q_vogelMax);
-      
-      // Use a helper that inverts q->p_wf (see previous code)
-      function invertFlow(q: number): number | null {
-        // Check single-phase inversion first:
-        const p_wf_single = pavg - q / J;
-        if (pavg > pb && p_wf_single >= pb) {
-          return p_wf_single;
-        }
-        // Otherwise, solve the Vogel quadratic:
-        // q - q_bubble = q_vmax * [1 - 0.2*x - 0.8*x^2], where x = p_wf/pb.
-        const A = 0.8;
-        const B = 0.2;
-        const C = (q - q_bubble) / q_vmax - 1;
-        const discriminant = B * B - 4 * A * C;
-        if (discriminant < 0) return null;
-        const sqrtD = Math.sqrt(discriminant);
-        const x1 = (-B + sqrtD) / (2 * A);
-        const x2 = (-B - sqrtD) / (2 * A);
-        const candidates = [x1, x2].filter((x) => x >= 0 && x <= 1);
-        if (candidates.length === 0) return null;
-        const x = Math.max(...candidates);
-        return x * pb;
-      }
-  
-      for (let q = 0; q <= qMax; q += dq) {
-        const p_wf = invertFlow(q);
-        if (p_wf !== null) {
-          points.push({ q_o: q, p_wf });
-        }
-      }
-      return points;
     } else {
       return points;
     }
+  
   }
   
