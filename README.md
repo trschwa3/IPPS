@@ -27,8 +27,8 @@ The program **converts user inputs** from various unit systems (e.g., Metric, Oi
 
 ### Next Steps (Roadmap)
 
-1. **Complete IPR for Gas and Two-Phase**  
-   The liquid-phase formulas are largely implemented. However, the `calculateGasIPR` and `calculateTwoPhaseIPR` stubs are present but not yet implemented. The next milestone will be to handle gas-dominated and two-phase flow equations for typical reservoir/well conditions.
+1. **Complete IPR for Gas**  
+   The liquid-phase formulas are largely implemented. However, the `calculateGasIPR` stub is present but not yet implemented. The next milestone will be to handle gas-dominated flow equations for typical reservoir/well conditions.
 
 2. **OPR (Outflow Performance Relationship)**  
    After the IPR side is robust, we will build the **OPR** module. This will cover wellbore hydraulics, choke models, and vertical lift performance correlations. Once we have both **IPR** and **OPR**, we can fully conduct nodal analyses to determine optimum well conditions under a range of scenarios.
