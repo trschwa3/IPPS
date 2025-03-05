@@ -399,9 +399,7 @@ export function calculateIPR(params: any, iprPhase: string, flowRegime: string) 
       // New parameter from the form:
       gasModel  // string: "muz" or "p_over_muz"
     }: any): { p_wf: number; q_o: number }[] {
-      // 1. Define the gas productivity index, J.
-      T_res = T_res + 459.67 // convert to rankine
-      const J = (k * h) / (1424 * T_res * (Math.log(re/rw) - 0.75 + s));
+      const J = (k * h) / (1424 * (T_res + 459.67) * (Math.log(re/rw) - 0.75 + s)); // T in rankine
 
       const points: { p_wf: number; q_o: number }[] = [];
       const methodUsed = spacingMethod || '';
@@ -409,7 +407,7 @@ export function calculateIPR(params: any, iprPhase: string, flowRegime: string) 
       const defaultN = 25;
 
       function getGasFlow(p_wf: number): number {
-        const mu_avg = (gas_visc_PT(p_wf, T_res, sg_g) + gas_visc_PT(p_avg, T_res, sg_g))/2 ;
+        const mu_avg = (gas_visc_PT(p_wf, T_res, sg_g) + gas_visc_PT(p_avg, T_res, sg_g))/2 ; //T in f
         const z_avg = (z_PT(p_wf, T_res, sg_g) + z_PT(p_avg, T_res, sg_g))/2;   
       
         if (gasModel === "muz") {   
@@ -469,12 +467,9 @@ export function calculateIPR(params: any, iprPhase: string, flowRegime: string) 
       // Model
       gasModel,
     }: any): { p_wf: number; q_o: number }[] {
-      // 1) Convert T to Rankine
-      const T_rankine = T_res + 459.67;
-    
       // 2) Factor (like J). Suppose 1424 is the constant from your references
       const denom = Math.log(re / rw) + s;
-      const factor = (k * h) / (1424 * T_rankine * denom);
+      const factor = (k * h) / (1424 * (T_res + 459.67) * denom);
     
       // 3) Prepare output
       const points: { p_wf: number; q_o: number }[] = [];
@@ -485,12 +480,12 @@ export function calculateIPR(params: any, iprPhase: string, flowRegime: string) 
       // 4) getGasFlow
       function getGasFlow(p_wf: number): number {
         // average mu and z between p_wf and pe
-        const mu_wf = gas_visc_PT(p_wf, T_rankine, sg_g);
-        const mu_pe = gas_visc_PT(pe, T_rankine, sg_g);
+        const mu_wf = gas_visc_PT(p_wf, T_res, sg_g);
+        const mu_pe = gas_visc_PT(pe, T_res, sg_g);
         const mu_avg = (mu_wf + mu_pe) / 2;
     
-        const z_wf = z_PT(p_wf, T_rankine, sg_g);
-        const z_pe = z_PT(pe, T_rankine, sg_g);
+        const z_wf = z_PT(p_wf, T_res, sg_g);
+        const z_pe = z_PT(pe, T_res, sg_g);
         const z_avg = (z_wf + z_pe) / 2;
     
         if (gasModel === "muz") {
@@ -552,35 +547,35 @@ export function calculateIPR(params: any, iprPhase: string, flowRegime: string) 
       // Model selection
       gasModel,  // "muz" or "p_over_muz"
     }: any): { p_wf: number; q_o: number }[] {
-      // 1) Convert T_res to Rankine if needed
-      const T_rankine = T_res + 459.67;
-    
       // 2) Compute the "factor" from the transient formula
-      console.log("calculating gas visc for logterm")
       const logTerm =
         Math.log(t) +
-        Math.log(k / (phi * 0.01 * gas_visc_PT(pi, T_rankine, sg_g) * ct * rw * rw)) -
+        Math.log(k / (phi * 0.01 * gas_visc_PT(pi, T_res, sg_g) * ct * rw * rw)) -
         3.23 +
         0.869 * s;
-      const factor = (k * h) / (1424 * T_res * logTerm);
-    
+      const z_method = 0; // change this and get diff. curves
+
+      const factor = (k * h) / (1424 * (T_res + 459.67) * logTerm);
+      const mu_pi = gas_visc_PT(pi, T_res, sg_g);
+      const z_pi = z_PT(pi, T_res, sg_g, z_method);
+      console.log("mui value of:", mu_pi);
+      console.log("zi value of:", z_pi);
       // 3) Prepare the output array
       const points: { p_wf: number; q_o: number }[] = [];
       const methodUsed = spacingMethod || "";
       const val = spacingValue || 0;
       const defaultN = 25;
-    
       // 4) Helper function: average gas properties between p_wf and pi, then compute Δm
       function getGasFlow(p_wf: number): number {
         // Compute average mu and z by sampling at p_wf and pi
         console.log("getting mu values")
-        const mu_wf = gas_visc_PT(p_wf, T_rankine, sg_g);
-        const mu_pi = gas_visc_PT(pi, T_rankine, sg_g);
+        //console.log("pwf, pi, tres", p_wf, pi, T_res);
+        const mu_wf = gas_visc_PT(p_wf, T_res, sg_g);
         const mu_avg = (mu_wf + mu_pi) / 2;
-        console.log("getting z values")
-        const z_wf = z_PT(p_wf, T_rankine, sg_g, 2);
-        const z_pi = z_PT(pi, T_rankine, sg_g, 2);
+        console.log("mu avg value of:", mu_avg);
+        const z_wf = z_PT(p_wf, T_res, sg_g, z_method);
         const z_avg = (z_wf + z_pi) / 2;
+        console.log("z value of:", z_avg);
     
         if (gasModel === "muz") {
           // ∆m = (p_i^2 - p_wf^2) / (mu_avg * z_avg)
@@ -605,7 +600,7 @@ export function calculateIPR(params: any, iprPhase: string, flowRegime: string) 
           // linearly span from pi down to 0
           const frac = i / (N - 1);
           const p_wf = pi * (1 - frac); // e.g. from pi down to 0
-          if (p_wf < 0) break;
+          if (p_wf < 14.7) break;
           const q_o = getGasFlow(p_wf);
           points.push({ p_wf, q_o });
         }
@@ -613,7 +608,7 @@ export function calculateIPR(params: any, iprPhase: string, flowRegime: string) 
       } else if (methodUsed === "DeltaP") {
         const deltaP = val > 0 ? val : 100;
         let p_wf = pi;
-        while (p_wf >= 0) {
+        while (p_wf >= 14.7) {
           const q_o = getGasFlow(p_wf);
           points.push({ p_wf, q_o });
           p_wf -= deltaP;

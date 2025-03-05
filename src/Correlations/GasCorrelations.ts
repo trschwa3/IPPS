@@ -15,11 +15,11 @@ export const Mwair = 28.97;   // Molecular weight of air in g/mol
  */
 function getPseudoCritical(
   Sg_g: number,
-  methodC: number = 0,
-  methodA: number = 0,
-  YN2: number = 0,
-  YCO2: number = 0,
-  YH2S: number = 0
+  _methodC: number = 0,
+  _methodA: number = 0,
+  _YN2: number = 0,
+  _YCO2: number = 0,
+  _YH2S: number = 0
 ): { Ppc: number; Tpc: number } {
   // Default (Standing’s correlation for natural gas):
   // Tpc in Rankine and Ppc in psia.
@@ -95,8 +95,8 @@ export function gas_visc_PT(
   const { Ppc, Tpc } = getPseudoCritical(Sg_g, methodC, methodA, YN2, YCO2, YH2S);
   const Tpr = Tr_reduced(T, Tpc);
   const Ppr = Pr_reduced(P, Ppc);
-  console.log("Ppr and Tpr in gas_visc_function:", Ppr, Tpr)
-  const Z = z_gas(Ppr, Tpr, 3);//methodz);
+  //console.log("Ppr and Tpr in gas_visc_function:", Ppr, Tpr)
+  const Z = z_gas(Ppr, Tpr, methodz);
   return gas_viscosity(P, T, Sg_g, Ppc, Tpc, Z, methodv, YN2, YCO2, YH2S);
 }
 
@@ -282,10 +282,10 @@ export function z_PT(
    */
   export function z_gas(P_pr: number, T_pr: number, method: number = 0): number {
     if (P_pr > 0 && T_pr > 0) {
-        console.log("debug in z_gas, value of method:", method)
+        //console.log("debug in z_gas, value of method:", method) // other methods do not work right now!!!
       switch (method) {
         case 0:
-          return Z_DAK1975(P_pr, T_pr); // Dranchuk & Abou-Kassem - 1975 (Default)
+          return Z_DAK1975_fixedPoint(P_pr, T_pr); // Dranchuk & Abou-Kassem - 1975 (Default)
         case 1:
           return Z_DPR1974(P_pr, T_pr); // Dranchuk, Purvis & Robinson - 1974
         case 2:
@@ -303,46 +303,77 @@ export function z_PT(
     return NaN;
   }
   
-  // --- Private helper functions for z factor calculations --- //
-  
   /**
-   * Dranchuk & Abou-Kassem (1975) correlation for z factor.
-   */
-  function Z_DAK1975(P_pr: number, T_pr: number): number {
-    // Valid for: ((0 < P_pr < 30) and (1 < T_pr <= 3)) or ((P_pr < 1) and (0.7 < T_pr < 1))
-    console.log(P_pr, T_pr)
-    if (((P_pr > 0 && P_pr < 30) && (T_pr > 1 && T_pr <= 3)) || ((P_pr < 1) && (T_pr > 0.7 && T_pr < 1))) {
-      const A1 = 0.3265, A2 = -1.07, A3 = -0.5339, A4 = 0.01569, A5 = -0.05165, A6 = 0.5475;
-      const A7 = -0.7361, A8 = 0.1844, A9 = 0.1056, A10 = 0.6134, A11 = 0.721;
-      const C1 = A1 + A2 / T_pr + A3 / Math.pow(T_pr, 3) + A4 / Math.pow(T_pr, 4) + A5 / Math.pow(T_pr, 5);
-      const C2 = A6 + A7 / T_pr + A8 / (T_pr * T_pr);
-      const C3 = A9 * (A7 / T_pr + A8 / (T_pr * T_pr));
-      let i = 0;
-      let ze = 0.27 * (P_pr / T_pr);
-      let Zc = 0;
-      const tol = 0.00001;
-      let fz = 0, dfdz = 0, rho_pr = 0;
-      do {
-        Zc = ze;
-        rho_pr = 0.27 * (P_pr / (ze * T_pr));
-        const C4 = A11 * rho_pr * rho_pr;
-        ze = 1 + C1 * rho_pr + C2 * Math.pow(rho_pr, 2) - C3 * Math.pow(rho_pr, 5) + A10 * (1 + C4) * Math.pow(rho_pr, 2) / Math.pow(T_pr, 3) * Math.exp(-C4);
-        fz = ze - Zc;
-        dfdz = 1 + (rho_pr * rho_pr / ze) * (C1 / rho_pr + 2 * C2 - 5 * C3 * Math.pow(rho_pr, 3) + 2 * A10 * Math.exp(-C4) * (1 + C4 - C4 * C4) / Math.pow(T_pr, 3));
-        ze = ze - fz / dfdz;
-        i++;
-      } while (Math.abs(ze - Zc) > tol && i < 100);
-      if (i >= 100) return 999; // did not converge
-      return ze;
-    } else {
-      if (P_pr === 0 && (T_pr > 1 && T_pr <= 3)) {
-        return 1;
-      } else {
-        throw new Error("Z_DAK1975: Out of correlation limits");
-      }
+ * Dranchuk & Abou-Kassem (1975) correlation for z factor
+ * using the recommended iterative approach in terms of rho_pr.
+ *
+ * Valid for: 0 < Ppr < 30, 1 < Tpr <= 3 (approx).
+ */
+  function Z_DAK1975_fixedPoint(Ppr: number, Tpr: number): number {
+    // Check domain
+    if (!(Ppr > 0 && Ppr < 30 && Tpr > 1 && Tpr <= 3)) {
+      throw new Error("Z_DAK1975: out of recommended correlation limits");
     }
+
+    // DAK coefficients
+    const A1 = 0.3265,
+      A2 = -1.07,
+      A3 = -0.5339,
+      A4 = 0.01569,
+      A5 = -0.05165,
+      A6 = 0.5475,
+      A7 = -0.7361,
+      A8 = 0.1844,
+      A9 = 0.1056,
+      A10 = 0.6134,
+      A11 = 0.721;
+
+    // Start with a guess for rho_pr
+    // Common practice: use the initial guess for Z ~ 0.27 * Ppr / (Tpr)
+    // => rho_pr ~ Ppr / Z / Tpr, so guess Z=1 => rho_pr = 0.27 * Ppr / Tpr
+    let rho_pr = 0.27 * (Ppr / Tpr);
+
+    let iteration = 0;
+    const maxIter = 100;
+    const tol = 1e-6;
+
+    while (iteration < maxIter) {
+      const rhoOld = rho_pr;
+
+      // 1) Compute polynomial coefficients
+      const C1 = A1 + A2 / Tpr + A3 / (Tpr ** 3) + A4 / (Tpr ** 4) + A5 / (Tpr ** 5);
+      const C2 = A6 + A7 / Tpr + A8 / (Tpr ** 2);
+      const C3 = A9 * (A7 / Tpr + A8 / (Tpr ** 2));
+
+      // 2) Evaluate Z from the current rho_pr
+      //    Z = 1 + C1*rho + C2*rho^2 - C3*rho^5 + A10*(1 + A11*rho^2)*rho^2 / Tpr^3 * exp(-A11*rho^2)
+      const rho2 = rho_pr * rho_pr;
+      const rho5 = rho2 * rho2 * rho_pr;
+      const C4 = A11 * rho2;
+      const Z = 1
+        + C1 * rho_pr
+        + C2 * rho2
+        - C3 * rho5
+        + A10 * (1 + C4) * rho2 / (Tpr ** 3) * Math.exp(-C4);
+
+      // 3) Update rho_pr from Z
+      //    rho_pr = 0.27 * Ppr / (Z * Tpr)
+      rho_pr = (0.27 * Ppr) / (Z * Tpr);
+
+      // 4) Check convergence
+      if (Math.abs(rho_pr - rhoOld) < tol) {
+        // Converged
+        // Return the final Z
+        return Z;
+      }
+
+      iteration++;
+    }
+
+    // If we exit loop => not converged
+    return 999; // or throw an Error
   }
-  
+
   /**
    * Dranchuk, Purvis & Robinson (1974) correlation for z factor.
    */
@@ -383,7 +414,7 @@ export function z_PT(
     // Valid for: ((0 < P_pr < 30) and (T_pr between 1 and 3)) or ((P_pr < 1) and (T_pr between 0.7 and 1))
     console.log(P_pr, T_pr)
     if (((P_pr > 0 && P_pr < 30) && (T_pr > 1 && T_pr <= 3)) || ((P_pr < 1) && (T_pr > 0.7 && T_pr < 1))) {
-      let T_inv = 1 / T_pr;
+      //let T_inv = 1 / T_pr;
       const A = 0.06125 * P_pr * T_pr * Math.exp(-1.2 * Math.pow(1 - T_pr, 2));
       const b = T_pr * (14.76 - 9.76 * T_pr + 4.58 * Math.pow(T_pr, 2));
       const c = T_pr * (90.7 - 242.2 * T_pr + 42.4 * Math.pow(T_pr, 2));
@@ -678,7 +709,7 @@ export function z_PT(
   // -------------------------------
   
   export function describe_z_factor(): void {
-    const category = "MyPETEfunctions";
+    //const category = "MyPETEfunctions";
     // You might wish to log these or integrate with your documentation system.
     console.log("z_PT: Calculates the dimensionless compressibility factor z (with pseudo reduced conditions).");
     console.log("z_gas: Calculates z given pseudo reduced P and T.");

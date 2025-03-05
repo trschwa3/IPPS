@@ -118,8 +118,8 @@ const NodalAnalysisForm: React.FC<NodalAnalysisFormProps> = ({
     { name: 'h', label: 'Thickness, h', unit: userUnits.length || 'ft' },
     { name: 's', label: 'Skin Factor, s', unit: 'dimensionless' },
     { name: 'rw', label: 'Well radius, rₒ', unit: userUnits.length || 'ft' },
-    { name: 'sg_g', label: 'Gas Specific Gravity, Sg_g', unit: '(dimensionless)' },
-    { name: 'T_res', label: 'Reservoir Temperature, T_res', unit: '(°F)' },
+    { name: 'sg_g', label: 'Gas Specific Gravity, Sg', unit: 'dimensionless' },
+    { name: 'T_res', label: 'Reservoir Temperature, Tᵣ', unit: '°F' },
   ];
 
   return (
@@ -263,7 +263,7 @@ const NodalAnalysisForm: React.FC<NodalAnalysisFormProps> = ({
               disabled={!canEditFields}
               style={inputStyle}
             />
-            <span style={unitStyle}>(%)</span>
+            <span style={unitStyle}>%</span>
           </div>
           <div style={rowStyle}>
             <label style={labelStyle}>
