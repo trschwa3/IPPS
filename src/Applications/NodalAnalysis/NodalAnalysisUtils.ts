@@ -1,3 +1,5 @@
+import { gas_visc_PT, z_PT } from "../../Correlations/GasCorrelations"
+
 export function calculateIPR(params: any, iprPhase: string, flowRegime: string) {
     if (iprPhase === 'Liquid') {
       switch (flowRegime) {
@@ -11,7 +13,16 @@ export function calculateIPR(params: any, iprPhase: string, flowRegime: string) 
           return [];
       }
     } else if (iprPhase === 'Gas') {
-      return calculateGasIPR(params);
+      switch (flowRegime) {
+        case 'Transient':
+          return gas_calculateTransientIPR(params);
+        case 'Pseudosteady-State':
+          return gas_calculatePseudosteadyIPR(params);
+        case 'Steady-State':
+          return gas_calculateSteadyStateIPR(params);
+        default:
+          return [];
+      }
     } else if (iprPhase === 'Two-phase') {
       switch (flowRegime) {
         case "Pseudosteady-State":
@@ -221,11 +232,6 @@ export function calculateIPR(params: any, iprPhase: string, flowRegime: string) 
     return points;
   }
   
-  // Gas and Two-phase stubs
-  function calculateGasIPR(_params: any) {
-    // ...
-    return [];
-  }
   function two_calculatePseudosteadyIPR({
     k,
     h,
@@ -375,4 +381,247 @@ export function calculateIPR(params: any, iprPhase: string, flowRegime: string) 
     }
   
   }
-  
+
+    // New gas IPR function for pseudosteady-state gas flow.
+    function gas_calculatePseudosteadyIPR({
+      k,
+      h,
+      rw,
+      re,
+      s,
+      // Gas reservoir properties:
+      T_res,    // Reservoir temperature (°F)
+      sg_g,     // Gas specific gravity (dimensionless)
+      p_avg,    // Average reservoir pressure (psia)
+      // Spacing options:
+      spacingMethod,
+      spacingValue,
+      // New parameter from the form:
+      gasModel  // string: "muz" or "p_over_muz"
+    }: any): { p_wf: number; q_o: number }[] {
+      // 1. Define the gas productivity index, J.
+      T_res = T_res + 459.67 // convert to rankine
+      const J = (k * h) / (1424 * T_res * (Math.log(re/rw) - 0.75 + s));
+
+      const points: { p_wf: number; q_o: number }[] = [];
+      const methodUsed = spacingMethod || '';
+      const val = spacingValue || 0;
+      const defaultN = 25;
+
+      function getGasFlow(p_wf: number): number {
+        const mu_avg = (gas_visc_PT(p_wf, T_res, sg_g) + gas_visc_PT(p_avg, T_res, sg_g))/2 ;
+        const z_avg = (z_PT(p_wf, T_res, sg_g) + z_PT(p_avg, T_res, sg_g))/2;   
+      
+        if (gasModel === "muz") {   
+          const delta_m = (Math.pow(p_avg,2) - Math.pow(p_wf,2))/(mu_avg * z_avg);
+          return J * delta_m;
+      
+        } else if (gasModel === "p_over_muz") {
+          const delta_m = 2 * (p_avg - p_wf) * ((p_avg + p_wf)/ (2 * mu_avg * z_avg));
+          return J * delta_m;
+      
+        } else {
+          // fallback or error if user picks an unknown gasModel
+          // e.g. return J * delta_m using "muz" as default
+          const delta_m = (Math.pow(p_avg,2) - Math.pow(p_wf,2)) / (mu_avg * z_avg);
+          return J * delta_m;
+        }
+      }
+      
+      // 5. Implement the spacing methods. (Here we show the "NumPoints" approach.)
+      if (methodUsed === 'NumPoints' || methodUsed === '') {
+        const N = val > 0 ? val : defaultN;
+        for (let i = 0; i < N; i++) {
+          // Here, we linearly span p_wf from p_avg down to 0.
+          const frac = i / (N - 1);
+          const p_wf = p_avg * (1 - frac);
+          const q_o = getGasFlow(p_wf);
+          points.push({ p_wf, q_o });
+        }
+        return points;
+      } else if (methodUsed === 'DeltaP') {
+        const deltaP = val > 0 ? val : 100;
+        let p_wf = p_avg;
+        while (p_wf >= 0) {
+          const q_o = getGasFlow(p_wf);
+          points.push({ p_wf, q_o });
+          p_wf -= deltaP;
+        }
+        return points;
+      } else {
+        return points;
+      }
+    }
+
+    function gas_calculateSteadyStateIPR({
+      k,
+      h,
+      rw,
+      re,
+      s,
+      // Gas reservoir properties
+      T_res,
+      sg_g,
+      pe,    // boundary pressure
+      // UI spacing
+      spacingMethod,
+      spacingValue,
+      // Model
+      gasModel,
+    }: any): { p_wf: number; q_o: number }[] {
+      // 1) Convert T to Rankine
+      const T_rankine = T_res + 459.67;
+    
+      // 2) Factor (like J). Suppose 1424 is the constant from your references
+      const denom = Math.log(re / rw) + s;
+      const factor = (k * h) / (1424 * T_rankine * denom);
+    
+      // 3) Prepare output
+      const points: { p_wf: number; q_o: number }[] = [];
+      const methodUsed = spacingMethod || "";
+      const val = spacingValue || 0;
+      const defaultN = 25;
+    
+      // 4) getGasFlow
+      function getGasFlow(p_wf: number): number {
+        // average mu and z between p_wf and pe
+        const mu_wf = gas_visc_PT(p_wf, T_rankine, sg_g);
+        const mu_pe = gas_visc_PT(pe, T_rankine, sg_g);
+        const mu_avg = (mu_wf + mu_pe) / 2;
+    
+        const z_wf = z_PT(p_wf, T_rankine, sg_g);
+        const z_pe = z_PT(pe, T_rankine, sg_g);
+        const z_avg = (z_wf + z_pe) / 2;
+    
+        if (gasModel === "muz") {
+          // ∆m = (p_e^2 - p_wf^2)/(mu_avg * z_avg)
+          const delta_m = (pe * pe - p_wf * p_wf) / (mu_avg * z_avg);
+          return factor * delta_m;
+        } else if (gasModel === "p_over_muz") {
+          // ∆m = 2*(p_e - p_wf)*((p_e + p_wf)/(2*mu_avg*z_avg))
+          const delta_m =
+            2 * (pe - p_wf) * ((pe + p_wf) / (2 * mu_avg * z_avg));
+          return factor * delta_m;
+        } else {
+          // default
+          const delta_m = (pe * pe - p_wf * p_wf) / (mu_avg * z_avg);
+          return factor * delta_m;
+        }
+      }
+    
+      // 5) spacing
+      if (methodUsed === "NumPoints" || methodUsed === "") {
+        const N = val > 0 ? val : defaultN;
+        for (let i = 0; i < N; i++) {
+          const frac = i / (N - 1);
+          const p_wf = pe * (1 - frac); // from pe down to 0
+          if (p_wf < 0) break;
+          const q_o = getGasFlow(p_wf);
+          points.push({ p_wf, q_o });
+        }
+        return points;
+      } else if (methodUsed === "DeltaP") {
+        const deltaP = val > 0 ? val : 100;
+        let p_wf = pe;
+        while (p_wf >= 0) {
+          const q_o = getGasFlow(p_wf);
+          points.push({ p_wf, q_o });
+          p_wf -= deltaP;
+        }
+        return points;
+      } else {
+        return points;
+      }
+    }
+    
+    function gas_calculateTransientIPR({
+      k,
+      h,
+      rw,
+      s,
+      t,
+      phi,
+      ct,
+      // Gas reservoir properties
+      T_res,  // in °F
+      sg_g,
+      pi,     // initial reservoir pressure (psia)
+      // UI / spacing
+      spacingMethod,
+      spacingValue,
+      // Model selection
+      gasModel,  // "muz" or "p_over_muz"
+    }: any): { p_wf: number; q_o: number }[] {
+      // 1) Convert T_res to Rankine if needed
+      const T_rankine = T_res + 459.67;
+    
+      // 2) Compute the "factor" from the transient formula
+      console.log("calculating gas visc for logterm")
+      const logTerm =
+        Math.log(t) +
+        Math.log(k / (phi * 0.01 * gas_visc_PT(pi, T_rankine, sg_g) * ct * rw * rw)) -
+        3.23 +
+        0.869 * s;
+      const factor = (k * h) / (1424 * T_res * logTerm);
+    
+      // 3) Prepare the output array
+      const points: { p_wf: number; q_o: number }[] = [];
+      const methodUsed = spacingMethod || "";
+      const val = spacingValue || 0;
+      const defaultN = 25;
+    
+      // 4) Helper function: average gas properties between p_wf and pi, then compute Δm
+      function getGasFlow(p_wf: number): number {
+        // Compute average mu and z by sampling at p_wf and pi
+        console.log("getting mu values")
+        const mu_wf = gas_visc_PT(p_wf, T_rankine, sg_g);
+        const mu_pi = gas_visc_PT(pi, T_rankine, sg_g);
+        const mu_avg = (mu_wf + mu_pi) / 2;
+        console.log("getting z values")
+        const z_wf = z_PT(p_wf, T_rankine, sg_g, 2);
+        const z_pi = z_PT(pi, T_rankine, sg_g, 2);
+        const z_avg = (z_wf + z_pi) / 2;
+    
+        if (gasModel === "muz") {
+          // ∆m = (p_i^2 - p_wf^2) / (mu_avg * z_avg)
+          const delta_m = (pi * pi - p_wf * p_wf) / (mu_avg * z_avg);
+          return factor * delta_m;
+        } else if (gasModel === "p_over_muz") {
+          // ∆m = 2*(p_i - p_wf)*((p_i + p_wf)/(2 * mu_avg * z_avg))
+          const delta_m =
+            2 * (pi - p_wf) * ((pi + p_wf) / (2 * mu_avg * z_avg));
+          return factor * delta_m;
+        } else {
+          // Default to "muz" if not specified
+          const delta_m = (pi * pi - p_wf * p_wf) / (mu_avg * z_avg);
+          return factor * delta_m;
+        }
+      }
+    
+      // 5) Implement spacing methods
+      if (methodUsed === "NumPoints" || methodUsed === "") {
+        const N = val > 0 ? val : defaultN;
+        for (let i = 0; i < N; i++) {
+          // linearly span from pi down to 0
+          const frac = i / (N - 1);
+          const p_wf = pi * (1 - frac); // e.g. from pi down to 0
+          if (p_wf < 0) break;
+          const q_o = getGasFlow(p_wf);
+          points.push({ p_wf, q_o });
+        }
+        return points;
+      } else if (methodUsed === "DeltaP") {
+        const deltaP = val > 0 ? val : 100;
+        let p_wf = pi;
+        while (p_wf >= 0) {
+          const q_o = getGasFlow(p_wf);
+          points.push({ p_wf, q_o });
+          p_wf -= deltaP;
+        }
+        return points;
+      } else {
+        // we skip DeltaQ for simplicity
+        return points;
+      }
+    }
+    
