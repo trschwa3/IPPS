@@ -23,6 +23,59 @@ const NodalAnalysisForm: React.FC<NodalAnalysisFormProps> = ({
   selectedUnitSystem,
 }) => {
   
+  const isFormComplete = (): boolean => {
+    // iprPhase must be set
+    if (!iprPhase) return false;
+    // For Liquid and Gas, flowRegime must be set.
+    if ((iprPhase === "Liquid" || iprPhase === "Gas") && !flowRegime) return false;
+  
+    // Build an array of required field names.
+    let requiredFields: string[] = [];
+    if (iprPhase === "Liquid" || iprPhase === "Two-phase") {
+      // Oil common fields (s is required but we don't check negativity on s)
+      requiredFields.push("k", "h", "Bo", "muo", "s", "rw");
+      if (flowRegime === "Transient") {
+        // Transient for Liquid requires these fields:
+        requiredFields.push("phi", "ct", "t", "pi");
+      } else if (flowRegime === "Pseudosteady-State") {
+        // Pseudosteady-State for Liquid (or Two-phase) requires:
+        requiredFields.push("pavg", "re");
+        if (iprPhase === "Two-phase") {
+          // Two-phase adds these:
+          requiredFields.push("pb", "a");
+        }
+      } else if (flowRegime === "Steady-State") {
+        // Steady-State for Liquid requires:
+        requiredFields.push("pe", "re");
+      }
+    } else if (iprPhase === "Gas") {
+      // Gas common fields:
+      requiredFields.push("k", "h", "s", "rw", "sg_g", "T_res");
+      if (flowRegime === "Transient") {
+        // Gas Transient requires:
+        requiredFields.push("phi", "ct", "t", "pi");
+      } else if (flowRegime === "Pseudosteady-State") {
+        // Gas pseudosteady requires:
+        requiredFields.push("p_avg", "re");
+      } else if (flowRegime === "Steady-State") {
+        // Gas steady requires:
+        requiredFields.push("pe", "re");
+      }
+    }
+  
+    // Check that every required field is filled and non-negative (except for "s")
+    for (const field of requiredFields) {
+      if (formValues[field] === undefined || formValues[field] === "") {
+        return false;
+      }
+      if (field !== "s" && Number(formValues[field]) < 0) {
+        return false;
+      }
+    }
+    return true;
+  };
+  
+
   useEffect(() => {
     if (iprPhase === 'Two-phase' && flowRegime !== 'Pseudosteady-State') {
       setFlowRegime('Pseudosteady-State');
@@ -42,7 +95,7 @@ const NodalAnalysisForm: React.FC<NodalAnalysisFormProps> = ({
   // Identify units from JSON (or fallback to Oil Field style)
   const userUnits = unitSystems[selectedUnitSystem as keyof typeof unitSystems] || {};
 
-  // Disable fields if phase or (for Liquid) flow regime is not selected
+  // Disable fields if phase or (for Liquid & gas) flow regime is not selected
   const canEditFields =
     iprPhase !== '' && (iprPhase !== 'Liquid' || flowRegime !== '');
 
@@ -119,7 +172,7 @@ const NodalAnalysisForm: React.FC<NodalAnalysisFormProps> = ({
     { name: 's', label: 'Skin Factor, s', unit: 'dimensionless' },
     { name: 'rw', label: 'Well radius, rₒ', unit: userUnits.length || 'ft' },
     { name: 'sg_g', label: 'Gas Specific Gravity, Sg', unit: 'dimensionless' },
-    { name: 'T_res', label: 'Reservoir Temperature, Tᵣ', unit: '°F' },
+    { name: 'T_res', label: 'Reservoir Temperature, Tᵣ', unit: userUnits.temperature || '°F' },
   ];
 
   return (
@@ -291,11 +344,11 @@ const NodalAnalysisForm: React.FC<NodalAnalysisFormProps> = ({
               disabled={!canEditFields}
               style={inputStyle}
             />
-            <span style={unitStyle}>(hr)</span>
+            <span style={unitStyle}>({userUnits.time || 'hrs'})</span>
           </div>
           <div style={rowStyle}>
             <label style={labelStyle}>
-              Initial Reservoir Pressure, p<sub>i</sub>:
+              Initial Reservoir Pressure, pi<sub>i</sub>:
             </label>
             <input
               type="number"
@@ -316,7 +369,7 @@ const NodalAnalysisForm: React.FC<NodalAnalysisFormProps> = ({
         <>
           <div style={rowStyle}>
             <label style={labelStyle}>
-              Avg Reservoir Pressure, p<sub>avg</sub>:
+              Avg Reservoir Pressure, pavg<sub>avg</sub>:
             </label>
             <input
               type="number"
@@ -331,7 +384,7 @@ const NodalAnalysisForm: React.FC<NodalAnalysisFormProps> = ({
           </div>
           <div style={rowStyle}>
             <label style={labelStyle}>
-              Reservoir radius, r<sub>e</sub>:
+              Reservoir radius, re<sub>e</sub>:
             </label>
             <input
               type="number"
@@ -345,21 +398,38 @@ const NodalAnalysisForm: React.FC<NodalAnalysisFormProps> = ({
             <span style={unitStyle}>({userUnits.length || 'ft'})</span>
           </div>
           {iprPhase === 'Two-phase' && (
-            <div style={rowStyle}>
-              <label style={labelStyle}>
-                Saturation Pressure, p<sub>b</sub>:
-              </label>
-              <input
-                type="number"
-                step="any"
-                name="pb"
-                value={formValues.pb || ''}
-                onChange={handleNumericChange}
-                disabled={!canEditFields}
-                style={inputStyle}
-              />
-              <span style={unitStyle}>({userUnits.pressure || 'psi'})</span>
-            </div>
+            <>
+              <div style={rowStyle}>
+                <label style={labelStyle}>
+                  Saturation Pressure, p<sub>b</sub>:
+                </label>
+                <input
+                  type="number"
+                  step="any"
+                  name="pb"
+                  value={formValues.pb || ''}
+                  onChange={handleNumericChange}
+                  disabled={!canEditFields}
+                  style={inputStyle}
+                />
+                <span style={unitStyle}>({userUnits.pressure || 'psi'})</span>
+              </div>
+              <div style={rowStyle}>
+                <label style={labelStyle}>
+                  Bowedness, a<sub>e</sub>:
+                </label>
+                <input
+                  type="number"
+                  step="any"
+                  name="a"
+                  value={formValues.a || ''}
+                  onChange={handleNumericChange}
+                  disabled={!canEditFields}
+                  style={inputStyle}
+                />
+                <span style={unitStyle}>({'dimensionless'})</span>
+              </div>
+            </>
           )}
         </>
       )}
@@ -369,7 +439,7 @@ const NodalAnalysisForm: React.FC<NodalAnalysisFormProps> = ({
         <>
           <div style={rowStyle}>
             <label style={labelStyle}>
-              Boundary Pressure, p<sub>e</sub>:
+              Boundary Pressure, pe<sub>e</sub>:
             </label>
             <input
               type="number"
@@ -384,7 +454,7 @@ const NodalAnalysisForm: React.FC<NodalAnalysisFormProps> = ({
           </div>
           <div style={rowStyle}>
             <label style={labelStyle}>
-              Reservoir radius, r<sub>e</sub>:
+              Reservoir radius, re<sub>e</sub>:
             </label>
             <input
               type="number"
@@ -417,7 +487,9 @@ const NodalAnalysisForm: React.FC<NodalAnalysisFormProps> = ({
             <span style={unitStyle}>(%)</span>
           </div>
           <div style={rowStyle}>
-            <label style={labelStyle}>Total Compressibility, ct:</label>
+            <label style={labelStyle}>
+              Total Compressibility, c<span style={{ fontSize: 'smaller' }}>t</span>:
+            </label>
             <input
               type="number"
               step="any"
@@ -440,11 +512,11 @@ const NodalAnalysisForm: React.FC<NodalAnalysisFormProps> = ({
               disabled={!canEditFields}
               style={inputStyle}
             />
-            <span style={unitStyle}>(hr)</span>
+            <span style={unitStyle}>({userUnits.time || 'hrs'})</span>
           </div>
           <div style={rowStyle}>
             <label style={labelStyle}>
-              Initial Reservoir Pressure, p<sub>i</sub>:
+              Initial Reservoir Pressure, pi<sub>i</sub>:
             </label>
             <input
               type="number"
@@ -462,7 +534,7 @@ const NodalAnalysisForm: React.FC<NodalAnalysisFormProps> = ({
       {iprPhase === 'Gas' && flowRegime === 'Pseudosteady-State' && (
         <>
           <div style={rowStyle}>
-            <label style={labelStyle}>Average Reservoir Pressure, p_avg:</label>
+            <label style={labelStyle}>Average Reservoir Pressure, pavg:</label>
             <input
               type="number"
               step="any"
@@ -475,7 +547,7 @@ const NodalAnalysisForm: React.FC<NodalAnalysisFormProps> = ({
             <span style={unitStyle}>({userUnits.pressure || 'psi'})</span>
           </div>
           <div style={rowStyle}>
-            <label style={labelStyle}>Reservoir Radius, r_e:</label>
+            <label style={labelStyle}>Reservoir Radius, re:</label>
             <input
               type="number"
               step="any"
@@ -492,7 +564,7 @@ const NodalAnalysisForm: React.FC<NodalAnalysisFormProps> = ({
       {iprPhase === 'Gas' && flowRegime === 'Steady-State' && (
         <>
           <div style={rowStyle}>
-            <label style={labelStyle}>Boundary Pressure, p_e:</label>
+            <label style={labelStyle}>Boundary Pressure, pe:</label>
             <input
               type="number"
               step="any"
@@ -505,7 +577,7 @@ const NodalAnalysisForm: React.FC<NodalAnalysisFormProps> = ({
             <span style={unitStyle}>({userUnits.pressure || 'psi'})</span>
           </div>
           <div style={rowStyle}>
-            <label style={labelStyle}>Reservoir Radius, r_e:</label>
+            <label style={labelStyle}>Reservoir Radius, re:</label>
             <input
               type="number"
               step="any"
@@ -562,7 +634,7 @@ const NodalAnalysisForm: React.FC<NodalAnalysisFormProps> = ({
 
       <button
         onClick={onCalculate}
-        disabled={!iprPhase || (iprPhase === 'Liquid' && !flowRegime)}
+        disabled={!iprPhase || (iprPhase === 'Liquid' && !flowRegime) || !isFormComplete()}
         style={{ marginTop: '1rem' }}
       >
         Calculate
@@ -572,3 +644,4 @@ const NodalAnalysisForm: React.FC<NodalAnalysisFormProps> = ({
 };
 
 export default NodalAnalysisForm;
+

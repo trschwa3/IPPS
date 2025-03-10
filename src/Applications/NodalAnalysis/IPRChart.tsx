@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -25,61 +25,75 @@ ChartJS.register(
 
 interface IPRPoint {
   p_wf: number; // stored in "psi" (Oil Field standard)
-  q_o: number;  // stored in "STB/day" (Oil Field standard)
+  q_o: number;  // stored in STB/day for oil or MCF/day for gas (field standard)
 }
 
 interface IPRChartProps {
   iprData: IPRPoint[];
   selectedUnitSystem: string;
+  iprPhase: string; // so we know if Gas is selected
 }
 
-const IPRChart: React.FC<IPRChartProps> = ({ iprData, selectedUnitSystem }) => {
+const IPRChart: React.FC<IPRChartProps> = ({ iprData, selectedUnitSystem, iprPhase }) => {
   if (!iprData || iprData.length === 0) {
-    return <p>No IPR data yet. Please select phase/regime, enter parameters, and click "Calculate."</p>;
+    return (
+      <p>
+        No IPR data yet. Please select phase/regime, enter parameters, and click "Calculate."
+      </p>
+    );
   }
 
-  // Get available units from UnitConverter:
-  const flowUnits = Object.keys(UnitConverter.flowrateFactors); // e.g. ['m³/day', 'bbl/day', 'bbl/hr', 'STB/day', ...]
-  const pressureUnits = Object.keys(UnitConverter.pressureFactors); // e.g. ['Pa', 'kPa', 'MPa', 'mmHg', 'torr', 'bar', 'psi']
+  // Available units:
+  const flowUnits = Object.keys(UnitConverter.flowrateFactors);
+  const pressureUnits = Object.keys(UnitConverter.pressureFactors);
 
-  // Get the user’s default units from the selected system (if defined)
+  // User defaults from the selected system:
   const userUnits = unitSystems[selectedUnitSystem as keyof typeof unitSystems] || {};
-  const userFlowUnit = userUnits.flowrate;   // e.g. might be "STB/day or bbl/hr"
-  const userPressUnit = userUnits.pressure;  // e.g. "psi", etc.
+  const userFlowUnit = userUnits.flowrate;
+  const userPressUnit = userUnits.pressure;
 
-  // Fallback defaults: choose the first available unit if the user’s default isn’t valid
+  // Fallback defaults:
   const fallbackFlowUnit = flowUnits[0] || 'm³/day';
   const fallbackPressUnit = pressureUnits[0] || 'Pa';
 
-  const defaultFlowUnit = userFlowUnit && flowUnits.includes(userFlowUnit)
-    ? userFlowUnit
-    : fallbackFlowUnit;
-  const defaultPressUnit = userPressUnit && pressureUnits.includes(userPressUnit)
-    ? userPressUnit
-    : fallbackPressUnit;
+  // Set default based on phase:
+  const computeDefaultFlowUnit = () =>
+    iprPhase === 'Gas' && selectedUnitSystem === 'Oil Field'
+      ? 'MCF/day'
+      : userFlowUnit && flowUnits.includes(userFlowUnit)
+      ? userFlowUnit
+      : fallbackFlowUnit;
 
-  // Local states for chart customization
-  const [xUnit, setXUnit] = useState(defaultFlowUnit);
+  const defaultPressUnit =
+    userPressUnit && pressureUnits.includes(userPressUnit)
+      ? userPressUnit
+      : fallbackPressUnit;
+
+  // Local state for chart customization:
+  const [xUnit, setXUnit] = useState(computeDefaultFlowUnit());
   const [yUnit, setYUnit] = useState(defaultPressUnit);
-
   const [xMin, setXMin] = useState<number | undefined>(undefined);
   const [xMax, setXMax] = useState<number | undefined>(undefined);
   const [yMin, setYMin] = useState<number | undefined>(undefined);
   const [yMax, setYMax] = useState<number | undefined>(undefined);
 
-  // Sanitize xUnit and yUnit so they are valid keys
+  // When iprPhase or selectedUnitSystem changes, update xUnit:
+  useEffect(() => {
+    setXUnit(computeDefaultFlowUnit());
+  }, [iprPhase, selectedUnitSystem]);
+
   const safeXUnit = flowUnits.includes(xUnit) ? xUnit : fallbackFlowUnit;
   const safeYUnit = pressureUnits.includes(yUnit) ? yUnit : fallbackPressUnit;
 
-  // Convert iprData from standard ("STB/day" for flowrate, "psi" for pressure)
-  // to the chosen safe units.
+  // Determine the base (native) unit for flowrate conversions:
+  const baseFlowUnit = iprPhase === 'Gas' ? 'MCF/day' : 'STB/day';
+
+  // Convert the data:
   const convertedData = iprData.map(pt => {
-    const qConverted = UnitConverter.convert('flowrate', pt.q_o, 'STB/day', safeXUnit);
+    const qConverted = UnitConverter.convert('flowrate', pt.q_o, baseFlowUnit, safeXUnit);
     const pConverted = UnitConverter.convert('pressure', pt.p_wf, 'psi', safeYUnit);
     return { x: qConverted, y: pConverted };
   });
-
-  // Sort the points by x ascending for a smooth line
   convertedData.sort((a, b) => a.x - b.x);
 
   const data = {
@@ -113,7 +127,6 @@ const IPRChart: React.FC<IPRChartProps> = ({ iprData, selectedUnitSystem }) => {
     },
   };
 
-  // Handle CSV export of the converted data
   const handleExportCSV = () => {
     const rows = convertedData.map(pt => [pt.x, pt.y]);
     let csvContent = `data:text/csv;charset=utf-8,${safeXUnit},${safeYUnit}\n`;
@@ -137,7 +150,9 @@ const IPRChart: React.FC<IPRChartProps> = ({ iprData, selectedUnitSystem }) => {
           <label style={{ marginRight: '0.5rem' }}>Flow Axis Unit:</label>
           <select value={xUnit} onChange={e => setXUnit(e.target.value)}>
             {flowUnits.map(unitKey => (
-              <option key={unitKey} value={unitKey}>{unitKey}</option>
+              <option key={unitKey} value={unitKey}>
+                {unitKey}
+              </option>
             ))}
           </select>
         </div>
@@ -145,7 +160,9 @@ const IPRChart: React.FC<IPRChartProps> = ({ iprData, selectedUnitSystem }) => {
           <label style={{ marginRight: '0.5rem' }}>Pressure Axis Unit:</label>
           <select value={yUnit} onChange={e => setYUnit(e.target.value)}>
             {pressureUnits.map(unitKey => (
-              <option key={unitKey} value={unitKey}>{unitKey}</option>
+              <option key={unitKey} value={unitKey}>
+                {unitKey}
+              </option>
             ))}
           </select>
         </div>

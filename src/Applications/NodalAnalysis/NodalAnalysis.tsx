@@ -8,9 +8,11 @@ import UnitConverter from '../../unit/UnitConverter';
 import { OilFVFWidget } from "../../Widgets/OilFVFWidget";
 import { OilViscosityWidget } from "../../Widgets/OilViscosityWidget";
 
+
 import unitSystemsData from '../../unit/unitSystems.json';
 
 interface UnitSystemDefinition {
+  [key: string]: string | undefined; // allow string indexing
   pressure?: string;
   flowrate?: string;
   length?: string;
@@ -20,7 +22,7 @@ interface UnitSystemDefinition {
   density?: string;
   oilFVF?: string; // If your JSON has a key for oil FVF
   time?: string;   // If your JSON tracks time units
-  // ... any others
+  temperature?: string; // If your JSON tracks temperature units
 }
 
 const unitSystems = unitSystemsData as Record<string, UnitSystemDefinition>;
@@ -39,128 +41,46 @@ const NodalAnalysis: React.FC = () => {
   function convertToOilfield(values: any) {
     // Look up the user’s base units from the JSON
     const userUnits = unitSystems[selectedUnitSystem] || {};
-
-    // Copy the user’s form values
+  
+    // Make a copy of the values
     const result = { ...values };
 
-    // 1) Convert all relevant PRESSURE fields (psi)
-    if (result.pi !== undefined) {
-      result.pi = UnitConverter.convert(
-        'pressure',
-        result.pi,
-        userUnits.pressure || 'psi',
-        'psi'
-      );
-    }
-    if (result.pavg !== undefined) {
-      result.pavg = UnitConverter.convert(
-        'pressure',
-        result.pavg,
-        userUnits.pressure || 'psi',
-        'psi'
-      );
-    }
-    if (result.pe !== undefined) {
-      result.pe = UnitConverter.convert(
-        'pressure',
-        result.pe,
-        userUnits.pressure || 'psi',
-        'psi'
-      );
-    }
-
-    // 2) Convert LENGTH fields (ft)
-    if (result.h !== undefined) {
-      result.h = UnitConverter.convert(
-        'length',
-        result.h,
-        userUnits.length || 'ft',
-        'ft'
-      );
-    }
-    if (result.rw !== undefined) {
-      result.rw = UnitConverter.convert(
-        'length',
-        result.rw,
-        userUnits.length || 'ft',
-        'ft'
-      );
-    }
-    if (result.re !== undefined) {
-      result.re = UnitConverter.convert(
-        'length',
-        result.re,
-        userUnits.length || 'ft',
-        'ft'
-      );
-    }
-
-    // 3) Convert PERMEABILITY (mD)
-    if (result.k !== undefined) {
-      result.k = UnitConverter.convert(
-        'permeability',
-        result.k,
-        userUnits.permeability || 'mD',
-        'mD'
-      );
-    }
-
-    // 4) Convert VISCOSITY (cp)
-    if (result.muo !== undefined) {
-      result.muo = UnitConverter.convert(
-        'viscosity',
-        result.muo,
-        userUnits.viscosity || 'cp',
-        'cp'
-      );
-    }
-
-    // 5) Convert COMPRESSIBILITY (1/psi)
-    if (result.ct !== undefined) {
-      result.ct = UnitConverter.convert(
-        'compressibility',
-        result.ct,
-        userUnits.compressibility || '1/psi',
-        '1/psi'
-      );
-    }
-
-    // 6) Convert FORMATION VOLUME FACTOR, Bo (bbl/STB)
-    //    Only if your JSON has a key for FVF, e.g. "oilFVF"
-    if (result.Bo !== undefined && userUnits.oilFVF) {
-      result.Bo = UnitConverter.convert(
-        'oil FVF',
-        result.Bo,
-        userUnits.oilFVF,
-        'bbl/STB'
-      );
-    }
-
-    // 7) Convert TIME, t (hr) if your code uses hours
-    if (result.t !== undefined && userUnits.time && userUnits.time !== 'hr') {
-      result.t = UnitConverter.convert('time', result.t, userUnits.time, 'hr');
-    }
-
-    // 8) Convert spacingValue if it’s a pressure increment or flowrate increment
-    //    (DeltaP => psi, DeltaQ => STB/d). If your code uses STB/d for flow.
+    const conversionMap = [
+      { key: 'pi', type: 'pressure', standard: 'psi' },
+      { key: 'pavg', type: 'pressure', standard: 'psi' },
+      { key: 'pe', type: 'pressure', standard: 'psi' },
+      { key: 'h', type: 'length', standard: 'ft' },
+      { key: 'rw', type: 'length', standard: 'ft' },
+      { key: 're', type: 'length', standard: 'ft' },
+      { key: 'k', type: 'permeability', standard: 'mD' },
+      { key: 'muo', type: 'viscosity', standard: 'cp' },
+      { key: 'ct', type: 'compressibility', standard: '1/psi' },
+      { key: 'T_res', type: 'temperature', standard: '°F' },
+      // For oil FVF, check a specific key in userUnits (if available)
+      { key: 'Bo', type: 'oil FVF', standard: 'bbl/STB', userKey: 'oilFVF' },
+      { key: 't', type: 'time', standard: 'hrs' },
+    ];
+  
+    conversionMap.forEach(({ key, type, standard, userKey }) => {
+      if (result[key] !== undefined) {
+        // Use the user's unit if available, otherwise use the standard unit.
+        const fromUnit = (userKey ? userUnits[userKey] : userUnits[type]) || standard;
+        result[key] = UnitConverter.convert(type, result[key], fromUnit, standard);
+      }
+    });
+  
+    // Handle spacingValue based on spacingMethod.
     if (result.spacingMethod === 'DeltaP' && result.spacingValue !== undefined) {
-      result.spacingValue = UnitConverter.convert(
-        'pressure',
-        result.spacingValue,
-        userUnits.pressure || 'psi',
-        'psi'
-      );
+      const fromUnit = userUnits.pressure || 'psi';
+      result.spacingValue = UnitConverter.convert('pressure', result.spacingValue, fromUnit, 'psi');
     } else if (result.spacingMethod === 'DeltaQ' && result.spacingValue !== undefined) {
-      result.spacingValue = UnitConverter.convert(
-        'flowrate',
-        result.spacingValue,
-        userUnits.flowrate || 'STB/d',
-        'STB/d'
-      );
+      const fromUnit = userUnits.flowrate || 'STB/d';
+      result.spacingValue = UnitConverter.convert('flowrate', result.spacingValue, fromUnit, 'STB/d');
     }
-
+  
     return result;
   }
+  
 
   const handleCalculate = () => {
     // Convert user inputs to Oil Field standard for everything.
@@ -207,7 +127,11 @@ const NodalAnalysis: React.FC = () => {
           onCalculate={handleCalculate}
           selectedUnitSystem={selectedUnitSystem}
         />
-        <IPRChart iprData={iprData} selectedUnitSystem={selectedUnitSystem} />
+        <IPRChart 
+        iprData={iprData} 
+        selectedUnitSystem={selectedUnitSystem} 
+        iprPhase={iprPhase} 
+        />
 
         {/* Conditionally render the selected widget */}
         <div style={{ marginTop: "2rem" }}>

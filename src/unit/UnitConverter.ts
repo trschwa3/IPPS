@@ -32,7 +32,7 @@ class UnitConverter {
       'bbl/hr': 0.1589878 * 24,
       'STB/day': 0.158987,    // 1 STB = 1 bbl
       'STB/d': 0.158987,    // 1 STB = 1 bbl
-      'Mcf/day': 28.3168466,  // 1000 ft³ = 28.3168466 m³
+      'MCF/day': 28.3168466,  // 1000 ft³ = 28.3168466 m³
       'm³/s': 86400,          // 1 m³/s = 86400 m³/day
       'L/s': 86.4,            // 1 L/s = 86.4 m³/day
     };
@@ -77,6 +77,7 @@ class UnitConverter {
       km: 1000,
       ft: 0.3048,
       in: 0.0254,
+      miles: 1609.34,
     };
   
     // Area (base: m²)
@@ -136,6 +137,14 @@ class UnitConverter {
       "J":1,
       "BTU":0.000947817,
       "kcal":0.000239006,
+    }
+    static timeFactors: Record<string, number> = {
+      "s":1,
+      "min":1/60,
+      "hrs":1/3600,
+      "day":1/86400,
+      "month":1/2592000,
+      "year":1/31536000,
     }
   
     /**
@@ -256,6 +265,9 @@ class UnitConverter {
             break;
           case 'permeability':
             factors = UnitConverter.permeabilityFactors;
+            break;
+          case 'time':
+            factors = UnitConverter.timeFactors;
             break;
           default:
             throw new Error(`Unsupported dimension: ${dimension}`);

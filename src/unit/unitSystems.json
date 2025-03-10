@@ -16,7 +16,8 @@
       "gasFVF":"m³/m³",
       "oilFVF":"m³/m³",
       "gor":"m³/m³",
-      "energy": "J"
+      "energy": "J",
+      "time": "hrs"
     },
     "Imperial": {
       "mass":"lbm",
@@ -35,7 +36,8 @@
       "gasFVF":"rcf/scf",
       "oilFVF":"bbl/STB",
       "gor":"scf/STB",
-      "energy": "cal"
+      "energy": "cal",
+      "time": "hrs"
     },
     "Oil Field": {
       "mass":"lbm",
@@ -54,7 +56,8 @@
       "gasFVF":"rcf/scf",
       "oilFVF":"bbl/STB",
       "gor":"scf/STB",
-      "energy": "BTU"
+      "energy": "BTU",
+      "time": "hrs"
     }
   }
   

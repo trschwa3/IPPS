@@ -25,6 +25,7 @@ const availableUnits = {
   gasFVF: Object.keys(UnitConverter.gasFVFFactors),
   GOR: Object.keys(UnitConverter.oilFVFFactors),
   energy: Object.keys(UnitConverter.energyFactors),
+  time: Object.keys(UnitConverter.timeFactors),
   // Temperature is not defined in UnitConverter factors, so list manually:
   temperature: ['K', '°C', '°F', '°R'],
 } as const;
@@ -48,7 +49,8 @@ const CreateCustomUnitSystem: React.FC<CreateCustomUnitSystemProps> = ({ onSave,
     gasFVF:'',
     oilFVF:'',
     gor:'',
-    energy:''
+    energy:'',
+    time:''
   });
 
   const handleSystemNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {

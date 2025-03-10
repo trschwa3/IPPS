@@ -1,5 +1,4 @@
-// src/Applications/NodalAnalysis/PhaseSelection.tsx
-import React, { useState } from 'react';
+import React, { useState, ChangeEvent, FormEvent } from 'react';
 
 interface PhaseSelectionProps {
   onSubmit: (iprPhase: string, oprPhase: string, iprFlowRegime: string) => void;
@@ -8,26 +7,38 @@ interface PhaseSelectionProps {
 const PhaseSelection: React.FC<PhaseSelectionProps> = ({ onSubmit }) => {
   const iprOptions = ['Liquid', 'Two-phase', 'Gas'];
   const oprOptions = ['Liquid', 'Two-phase', 'Gas'];
-  
-  // Flow regime options for single-phase (liquid) IPR
   const flowRegimeOptions = ['Transient', 'Pseudosteady-State', 'Steady-State'];
 
-  const [selectedIpr, setSelectedIpr] = useState('');
-  const [selectedOpr, setSelectedOpr] = useState('');
-  const [selectedFlowRegime, setSelectedFlowRegime] = useState('');
+  // Consolidate all selection state into one object.
+  const [selection, setSelection] = useState({
+    iprPhase: '',
+    oprPhase: '',
+    iprFlowRegime: '',
+  });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  // Single change handler that updates the state based on the select's "name" attribute.
+  const handleChange = (e: ChangeEvent<HTMLSelectElement>) => {
+    const { name, value } = e.target;
+    setSelection(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
-    if (!selectedIpr || !selectedOpr) {
+    if (!selection.iprPhase || !selection.oprPhase) {
       alert('Please select a phase for both IPR and OPR.');
       return;
     }
-    // If user picked "Liquid" for IPR, we require a flow regime
-    if (selectedIpr === 'Liquid' && !selectedFlowRegime) {
-      alert('Please select a flow regime for Liquid IPR.');
+    // For Liquid and Gas, require an explicit flow regime selection.
+    // For Two-phase, default to Pseudosteady-State if none is chosen.
+    const iprFlowRegime =
+      selection.iprPhase === 'Two-phase'
+        ? selection.iprFlowRegime || 'Pseudosteady-State'
+        : selection.iprFlowRegime;
+    if ((selection.iprPhase === 'Liquid' || selection.iprPhase === 'Gas') && !iprFlowRegime) {
+      alert('Please select a flow regime for IPR.');
       return;
     }
-    onSubmit(selectedIpr, selectedOpr, selectedFlowRegime);
+    onSubmit(selection.iprPhase, selection.oprPhase, iprFlowRegime);
   };
 
   return (
@@ -35,9 +46,9 @@ const PhaseSelection: React.FC<PhaseSelectionProps> = ({ onSubmit }) => {
       <div>
         <label>
           IPR Phase:
-          <select value={selectedIpr} onChange={(e) => setSelectedIpr(e.target.value)}>
+          <select name="iprPhase" value={selection.iprPhase} onChange={handleChange}>
             <option value="">-- Select IPR Phase --</option>
-            {iprOptions.map((phase) => (
+            {iprOptions.map(phase => (
               <option key={phase} value={phase}>
                 {phase}
               </option>
@@ -46,17 +57,18 @@ const PhaseSelection: React.FC<PhaseSelectionProps> = ({ onSubmit }) => {
         </label>
       </div>
 
-      {/* Conditionally show flow regime dropdown if user selected 'Liquid' for IPR */}
-      {selectedIpr === 'Liquid' && (
+      {/* Show flow regime selection for Liquid and Gas */}
+      {(selection.iprPhase === 'Liquid' || selection.iprPhase === 'Gas') && (
         <div>
           <label>
             IPR Flow Regime:
             <select
-              value={selectedFlowRegime}
-              onChange={(e) => setSelectedFlowRegime(e.target.value)}
+              name="iprFlowRegime"
+              value={selection.iprFlowRegime}
+              onChange={handleChange}
             >
               <option value="">-- Select Flow Regime --</option>
-              {flowRegimeOptions.map((regime) => (
+              {flowRegimeOptions.map(regime => (
                 <option key={regime} value={regime}>
                   {regime}
                 </option>
@@ -69,9 +81,9 @@ const PhaseSelection: React.FC<PhaseSelectionProps> = ({ onSubmit }) => {
       <div>
         <label>
           OPR Phase:
-          <select value={selectedOpr} onChange={(e) => setSelectedOpr(e.target.value)}>
+          <select name="oprPhase" value={selection.oprPhase} onChange={handleChange}>
             <option value="">-- Select OPR Phase --</option>
-            {oprOptions.map((phase) => (
+            {oprOptions.map(phase => (
               <option key={phase} value={phase}>
                 {phase}
               </option>
@@ -79,6 +91,7 @@ const PhaseSelection: React.FC<PhaseSelectionProps> = ({ onSubmit }) => {
           </select>
         </label>
       </div>
+
       <button type="submit">Continue</button>
     </form>
   );

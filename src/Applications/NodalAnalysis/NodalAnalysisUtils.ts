@@ -433,7 +433,7 @@ export function calculateIPR(params: any, iprPhase: string, flowRegime: string) 
           // Here, we linearly span p_wf from p_avg down to 0.
           const frac = i / (N - 1);
           const p_wf = p_avg * (1 - frac);
-          const q_o = getGasFlow(p_wf);
+          const q_o = getGasFlow(p_wf) / 1000;
           points.push({ p_wf, q_o });
         }
         return points;
@@ -441,7 +441,7 @@ export function calculateIPR(params: any, iprPhase: string, flowRegime: string) 
         const deltaP = val > 0 ? val : 100;
         let p_wf = p_avg;
         while (p_wf >= 0) {
-          const q_o = getGasFlow(p_wf);
+          const q_o = getGasFlow(p_wf) / 1000;
           points.push({ p_wf, q_o });
           p_wf -= deltaP;
         }
@@ -509,7 +509,7 @@ export function calculateIPR(params: any, iprPhase: string, flowRegime: string) 
         const N = val > 0 ? val : defaultN;
         for (let i = 0; i < N; i++) {
           const frac = i / (N - 1);
-          const p_wf = pe * (1 - frac); // from pe down to 0
+          const p_wf = pe * (1 - frac) / 1000; // from pe down to 0
           if (p_wf < 0) break;
           const q_o = getGasFlow(p_wf);
           points.push({ p_wf, q_o });
@@ -519,7 +519,7 @@ export function calculateIPR(params: any, iprPhase: string, flowRegime: string) 
         const deltaP = val > 0 ? val : 100;
         let p_wf = pe;
         while (p_wf >= 0) {
-          const q_o = getGasFlow(p_wf);
+          const q_o = getGasFlow(p_wf) / 1000;
           points.push({ p_wf, q_o });
           p_wf -= deltaP;
         }
@@ -600,16 +600,16 @@ export function calculateIPR(params: any, iprPhase: string, flowRegime: string) 
           // linearly span from pi down to 0
           const frac = i / (N - 1);
           const p_wf = pi * (1 - frac); // e.g. from pi down to 0
-          if (p_wf < 14.7) break;
-          const q_o = getGasFlow(p_wf);
+          if (p_wf <= 0) break;
+          const q_o = getGasFlow(p_wf) / 1000; //mcf/d
           points.push({ p_wf, q_o });
         }
         return points;
       } else if (methodUsed === "DeltaP") {
         const deltaP = val > 0 ? val : 100;
         let p_wf = pi;
-        while (p_wf >= 14.7) {
-          const q_o = getGasFlow(p_wf);
+        while (p_wf > 0) {
+          const q_o = getGasFlow(p_wf) / 1000; //mcf/d
           points.push({ p_wf, q_o });
           p_wf -= deltaP;
         }
