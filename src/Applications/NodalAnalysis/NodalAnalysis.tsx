@@ -34,6 +34,7 @@ const NodalAnalysis: React.FC = () => {
   const selectedUnitSystem = state?.unitSystem || 'Oil Field';
 
   const [iprPhase, setIprPhase] = useState('');
+  const [zMethod, setzMethod] = useState('');
   const [flowRegime, setFlowRegime] = useState('');
   const [formValues, setFormValues] = useState<any>({});
   const [iprData, setIprData] = useState<Array<{ p_wf: number; q_o: number }>>([]);
@@ -94,7 +95,8 @@ const NodalAnalysis: React.FC = () => {
         spacingValue: oilfieldVals.spacingValue,
       },
       iprPhase,
-      flowRegime
+      flowRegime,
+      zMethod
     );
 
     // Save the result.
@@ -119,7 +121,9 @@ const NodalAnalysis: React.FC = () => {
       <div className="content-container">
         <NodalAnalysisForm
           iprPhase={iprPhase}
+          zMethod={zMethod}
           setIprPhase={setIprPhase}
+          setzMethod={setzMethod}
           flowRegime={flowRegime}
           setFlowRegime={setFlowRegime}
           formValues={formValues}

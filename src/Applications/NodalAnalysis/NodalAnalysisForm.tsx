@@ -3,7 +3,9 @@ import unitSystems from '../../unit/unitSystems.json';
 
 interface NodalAnalysisFormProps {
   iprPhase: string;
+  zMethod: string;
   setIprPhase: (phase: string) => void;
+  setzMethod: (phase: string) => void;
   flowRegime: string;
   setFlowRegime: (regime: string) => void;
   formValues: any;
@@ -14,7 +16,9 @@ interface NodalAnalysisFormProps {
 
 const NodalAnalysisForm: React.FC<NodalAnalysisFormProps> = ({
   iprPhase,
+  zMethod,
   setIprPhase,
+  setzMethod,
   flowRegime,
   setFlowRegime,
   formValues,
@@ -84,6 +88,8 @@ const NodalAnalysisForm: React.FC<NodalAnalysisFormProps> = ({
 
   const gas_oil_phaseOptions = ['Liquid', 'Two-phase', 'Gas'];
   const regimeOptions = ['Transient', 'Pseudosteady-State', 'Steady-State'];
+  const zmethodOptions = ['Dranchuk & Abou-Kassem - 1975', 'Dranchuk, Purvis & Robinson - 1974', 
+                          'Redlich Kwong - 1949', 'Brill & Beggs - 1974']
   let spacingMethods = ['NumPoints', 'DeltaP', 'DeltaQ'];
   if (iprPhase === 'Gas' || iprPhase === "Two-phase") {
     spacingMethods = ['NumPoints', 'DeltaP', 'DeltaQ'];
@@ -119,21 +125,14 @@ const NodalAnalysisForm: React.FC<NodalAnalysisFormProps> = ({
       setIprPhase(value);
     } else if (name === 'flowRegime') {
       setFlowRegime(value);
+    } else if (name === 'zMethod') {
+      setzMethod(value);
     } else {
       setFormValues((prev: any) => ({
         ...prev,
         [name]: value,
       }));
-    }
-  };
-
-  const handleRadioChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setFormValues((prev: any) => ({
-      ...prev,
-      [name]: value,
-    }));
-  };
+    }} 
 
   // Inline style helpers
   const rowStyle: React.CSSProperties = {
@@ -147,9 +146,13 @@ const NodalAnalysisForm: React.FC<NodalAnalysisFormProps> = ({
     fontWeight: 500,
   };
   const inputStyle: React.CSSProperties = {
-    width: '90px',
+    width: '100px',
     marginRight: '0.5rem',
   };
+  const selectStyle: React.CSSProperties = {
+    width: '220px', // or 100% if you prefer
+    marginRight: '0.5rem',
+  };  
   const unitStyle: React.CSSProperties = {
     fontStyle: 'italic',
     color: '#666',
@@ -182,7 +185,7 @@ const NodalAnalysisForm: React.FC<NodalAnalysisFormProps> = ({
       {/* IPR Phase Selector */}
       <div style={rowStyle}>
         <label style={labelStyle}>IPR Phase:</label>
-        <select name="iprPhase" value={iprPhase} onChange={handleTextChange} style={inputStyle}>
+        <select name="iprPhase" value={iprPhase} onChange={handleTextChange} style={selectStyle}>
           <option value="">-- Select --</option>
           {gas_oil_phaseOptions.map((p) => (
             <option key={p} value={p}>
@@ -200,7 +203,7 @@ const NodalAnalysisForm: React.FC<NodalAnalysisFormProps> = ({
             name="flowRegime"
             value={iprPhase === 'Two-phase' ? 'Pseudosteady-State' : flowRegime}
             onChange={handleTextChange}
-            style={inputStyle}
+            style={selectStyle}
             disabled={iprPhase === 'Two-phase'}
           >
             {iprPhase === 'Liquid' ? (
@@ -229,7 +232,7 @@ const NodalAnalysisForm: React.FC<NodalAnalysisFormProps> = ({
               name="flowRegime"
               value={flowRegime}
               onChange={handleTextChange}
-              style={inputStyle}
+              style={selectStyle}
               disabled={!canEditFields}
             >
               <option value="">-- Select --</option>
@@ -241,34 +244,21 @@ const NodalAnalysisForm: React.FC<NodalAnalysisFormProps> = ({
             </select>
           </div>
 
-          {/* Gas IPR Model Radio Buttons */}
+          {/* z method selector */}
           <div style={rowStyle}>
-            <label style={labelStyle}>Gas IPR Model:</label>
-            <label style={{ marginRight: '1rem' }}>
-              <input
-                type="radio"
-                name="gasModel"
-                value="muz"
-                checked={formValues.gasModel === 'muz'}
-                onChange={handleRadioChange}
-                disabled={!canEditFields}
-              />
-              mu * z constant
-            </label>
-            <label>
-              <input
-                type="radio"
-                name="gasModel"
-                value="p_over_muz"
-                checked={formValues.gasModel === 'p_over_muz'}
-                onChange={handleRadioChange}
-                disabled={!canEditFields}
-              />
-              p / (mu * z) constant
-            </label>
+            <label style={labelStyle}>z Factor Correlation:</label>
+            <select name="zMethod" value={zMethod} onChange={handleTextChange} style={selectStyle}>
+              <option value="">-- Select --</option>
+              {zmethodOptions.map((p) => (
+                <option key={p} value={p}>
+                  {p}
+                </option>
+              ))}
+            </select>
           </div>
         </>
       )}
+
 
       {(iprPhase === 'Liquid' || iprPhase === 'Two-phase') && oilcommonFields.map((field) => (
         <div style={rowStyle} key={field.name}>
@@ -516,7 +506,7 @@ const NodalAnalysisForm: React.FC<NodalAnalysisFormProps> = ({
           </div>
           <div style={rowStyle}>
             <label style={labelStyle}>
-              Initial Reservoir Pressure, pi<sub>i</sub>:
+              Initial Reservoir Pressure, p<sub>i</sub>:
             </label>
             <input
               type="number"

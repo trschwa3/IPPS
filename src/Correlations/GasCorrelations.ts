@@ -267,7 +267,7 @@ export function z_PT(
       const { Ppc, Tpc } = getPseudoCritical(Sg_g, methodC, methodA, YN2, YCO2, YH2S);
       const Tpr = Tr_reduced(T, Tpc); // Reduced temperature (dimensionless)
       const Ppr = Pr_reduced(P, Ppc); // Reduced pressure (dimensionless)
-      return z_gas(Ppr, Tpr, methodz);
+      return z_gas(Ppr, Tpr, methodz); // 0,1,2,3 work
     } else {
       throw new Error("gas z-factor: Sg_g is less than 0.56");
     }
@@ -285,16 +285,16 @@ export function z_PT(
         //console.log("debug in z_gas, value of method:", method) // other methods do not work right now!!!
       switch (method) {
         case 0:
-          return Z_DAK1975_fixedPoint(P_pr, T_pr); // Dranchuk & Abou-Kassem - 1975 (Default)
+          return Z_DAK1975(P_pr, T_pr); // Dranchuk & Abou-Kassem - 1975 (Default)
         case 1:
           return Z_DPR1974(P_pr, T_pr); // Dranchuk, Purvis & Robinson - 1974
-        case 2:
-          return Z_HallYarborough1974(P_pr, T_pr); // Hall & Yarborough - 1974
+        //case 2:
+          //return Z_HallYarborough1974(P_pr, T_pr); // Hall & Yarborough - 1974
         case 3:
           return Z_RedlichKwong1949(P_pr, T_pr); // Redlich Kwong - 1949
         case 4:
           return Z_BrillBeggs1974(P_pr, T_pr); // Brill & Beggs - 1974
-        case 5:
+        //case 5:
           return Z_table(P_pr, T_pr); // Chart interpolation
         default:
           return NaN;
@@ -309,7 +309,7 @@ export function z_PT(
  *
  * Valid for: 0 < Ppr < 30, 1 < Tpr <= 3 (approx).
  */
-  function Z_DAK1975_fixedPoint(Ppr: number, Tpr: number): number {
+  function Z_DAK1975(Ppr: number, Tpr: number): number {
     // Check domain
     if (!(Ppr > 0 && Ppr < 30 && Tpr > 1 && Tpr <= 3)) {
       throw new Error("Z_DAK1975: out of recommended correlation limits");
@@ -374,99 +374,119 @@ export function z_PT(
     return 999; // or throw an Error
   }
 
-  /**
-   * Dranchuk, Purvis & Robinson (1974) correlation for z factor.
-   */
-  function Z_DPR1974(P_pr: number, T_pr: number): number {
-    //console.log(P_pr, T_pr)
-    if ((P_pr >= 0 && P_pr < 15) && (T_pr > 1 && T_pr <= 3)) {
-      const A1 = 0.31506237, A2 = -1.0467099, A3 = -0.57832729, A4 = 0.53530771;
-      const A5 = -0.61232032, A6 = -0.10488813, A7 = 0.68157001, A8 = 0.68446549;
-      const B1 = A1 + A2 / T_pr + A3 / Math.pow(T_pr, 3);
-      const B2 = A4 + A5 / T_pr;
-      const B3 = A5 * A6 / T_pr;
-      const B4 = A7 / Math.pow(T_pr, 3);
-      let i = 0;
-      let ze = 0.5;
-      let Zc = 0;
-      let fz = 0, dfdz = 0, rho_pr = 0;
-      do {
-        rho_pr = 0.27 * (P_pr / (ze * T_pr));
-        const B5 = A8 * rho_pr * rho_pr;
-        Zc = 1 + B1 * rho_pr + B2 * Math.pow(rho_pr, 2) + B3 * Math.pow(rho_pr, 5) + B4 * (rho_pr * rho_pr) * (1 + B5) * Math.exp(-B5);
-        fz = ze - Zc;
-        const c = rho_pr / ze;
-        dfdz = 1 + c * (B1 + 2 * B2 * rho_pr + 5 * B3 * Math.pow(rho_pr, 4) + 2 * B4 * rho_pr * Math.exp(-B5) * (1 + B5 - Math.pow(B5, 2)));
-        ze = ze - fz / dfdz;
-        i++;
-      } while (Math.abs(ze - Zc) > 0.00001 && i < 100);
-      if (i >= 100) return 999;
-      return ze;
-    } else {
-      throw new Error("Z_DPR1974: Out of correlation limits");
+  // Dranchuk, Purvis & Robinson (1974) using a similar fixed‐point scheme.
+  function Z_DPR1974(Ppr: number, Tpr: number): number {
+    if (!(Ppr > 0 && Ppr < 15 && Tpr > 1 && Tpr <= 3)) {
+      throw new Error("Z_DPR1974: out of recommended correlation limits");
     }
+    const A1 = 0.31506237,
+      A2 = -1.0467099,
+      A3 = -0.57832729,
+      A4 = 0.53530771,
+      A5 = -0.61232032,
+      A6 = -0.10488813,
+      A7 = 0.68157001,
+      A8 = 0.68446549;
+    const B1 = A1 + A2 / Tpr + A3 / Math.pow(Tpr, 3);
+    const B2 = A4 + A5 / Tpr;
+    const B3 = A5 * A6 / Tpr;
+    const B4 = A7 / Math.pow(Tpr, 3);
+
+    // Initial guess for ρₚᵣ.
+    let rho_pr = 0.27 * (Ppr / Tpr);
+    let iteration = 0;
+    const maxIter = 100;
+    const tol = 1e-6;
+    let Z = 0;
+
+    while (iteration < maxIter) {
+      const B5 = A8 * rho_pr * rho_pr;
+      Z =
+        1 +
+        B1 * rho_pr +
+        B2 * Math.pow(rho_pr, 2) +
+        B3 * Math.pow(rho_pr, 5) +
+        B4 * (rho_pr * rho_pr) * (1 + B5) * Math.exp(-B5);
+      const newRho = (0.27 * Ppr) / (Z * Tpr);
+      if (Math.abs(newRho - rho_pr) < tol) return Z;
+      rho_pr = newRho;
+      iteration++;
+    }
+    return 999;
   }
+  /*
+  // Hall & Yarborough (1974) using Newton's method on an auxiliary variable Y.
+  export function Z_HallYarborough1974(Ppr: number, Tpr: number): number {
+    // Domain check
+    if (!((Ppr > 0 && Ppr < 30 && Tpr > 1 && Tpr <= 3) || (Ppr < 1 && Tpr > 0.7 && Tpr < 1))) {
+      throw new Error("Z_HallYarborough1974: out of recommended correlation limits");
+    }
+    const A = 0.06125 * Ppr * Tpr * Math.exp(-1.2 * Math.pow(1 - Tpr, 2));
+    const b = Tpr * (14.76 - 9.76 * Tpr + 4.58 * Math.pow(Tpr, 2));
+    const c = Tpr * (90.7 - 242.2 * Tpr + 42.4 * Math.pow(Tpr, 2));
+    const d = 2.18 + 2.82 * Tpr;
   
-  /**
-   * Hall & Yarborough (1974) correlation for z factor.
-   */
-  function Z_HallYarborough1974(P_pr: number, T_pr: number): number {
-    // Valid for: ((0 < P_pr < 30) and (T_pr between 1 and 3)) or ((P_pr < 1) and (T_pr between 0.7 and 1))
-    console.log(P_pr, T_pr)
-    if (((P_pr > 0 && P_pr < 30) && (T_pr > 1 && T_pr <= 3)) || ((P_pr < 1) && (T_pr > 0.7 && T_pr < 1))) {
-      //let T_inv = 1 / T_pr;
-      const A = 0.06125 * P_pr * T_pr * Math.exp(-1.2 * Math.pow(1 - T_pr, 2));
-      const b = T_pr * (14.76 - 9.76 * T_pr + 4.58 * Math.pow(T_pr, 2));
-      const c = T_pr * (90.7 - 242.2 * T_pr + 42.4 * Math.pow(T_pr, 2));
-      const d = 2.18 + 2.82 * T_pr;
-      let i = 0;
-      let yc = A; 
-      let Y = 0;
-      let fy = 0, dfdy = 0;
-      do {
-        Y = yc;
-        // If Y becomes > 1, force a value (as per the VBA comment)
-        if (Y > 1) Y = 0.6;
-        fy = -A + (Y + Math.pow(Y, 2) + Math.pow(Y, 3) - Math.pow(Y, 4)) / Math.pow(1 - Y, 3) - b * Math.pow(Y, 2) + c * Math.pow(Y, d);
-        dfdy = (1 + 4 * Y + 4 * Y * Y - 4 * Math.pow(Y, 3) + Math.pow(Y, 4)) / Math.pow(1 - Y, 4) - 2 * b * Y + d * c * Math.pow(Y, d - 1);
-        yc = Y - fy / dfdy;
-        i++;
-      } while (Math.abs(Y - yc) > 0.00001 && i < 100);
-      const result = A / Y;
-      if (i >= 100) return 999;
-      return result;
-    } else {
-      if (P_pr === 0 && (T_pr > 1 && T_pr <= 3)) {
-        return 1;
-      } else {
-        throw new Error("Z_HallYarborough1974: Out of correlation limits");
+    // Use Y as the iterative variable.
+    // Instead of starting with Y = A, choose the minimum of A and 0.5 as initial guess.
+    let Y = Math.min(A, 0.5);
+    let iteration = 0;
+    const maxIter = 100;
+    const tol = 1e-6;
+  
+    while (iteration < maxIter) {
+      // Instead of abruptly forcing Y to 0.6 when Y > 1,
+      // gently bring it back into a plausible range.
+      if (Y > 1) {
+        Y = 0.9;
       }
+      const numerator = Y + Math.pow(Y, 2) + Math.pow(Y, 3) - Math.pow(Y, 4);
+      const denominator = Math.pow(1 - Y, 3);
+      const F = numerator / denominator - b * Y * Y + c * Math.pow(Y, d) - A;
+      
+      // Derivative calculation:
+      const N = Y + Math.pow(Y, 2) + Math.pow(Y, 3) - Math.pow(Y, 4);
+      const Nprime = 1 + 2 * Y + 3 * Math.pow(Y, 2) - 4 * Math.pow(Y, 3);
+      const D = Math.pow(1 - Y, 3);
+      const Dprime = 3 * Math.pow(1 - Y, 2);
+      const Fprime = (Nprime * D - N * Dprime) / (D * D) - 2 * b * Y + c * d * Math.pow(Y, d - 1);
+      
+      // Newton update
+      const Ynew = Y - F / Fprime;
+      if (Math.abs(Ynew - Y) < tol) {
+        return A / Ynew; // z = A / Ynew
+      }
+      Y = Ynew;
+      iteration++;
     }
+    return 999; // Indicate failure to converge.
   }
-  
-  /**
-   * Redlich-Kwong (1949) correlation for z factor.
-   */
-  function Z_RedlichKwong1949(P_pr: number, T_pr: number): number {
-    if ((P_pr >= 0 && P_pr < 15) && (T_pr > 1 && T_pr <= 3)) {
-      let Z = 1, z0 = 0, fz0 = 0, dfdz = 0, i = 0;
-      const u = Math.pow(2, 1 / 3) - 1;
-      const A = P_pr / (9 * u * Math.pow(T_pr, 5 / 2));
-      const b = (P_pr * u) / (3 * T_pr);
-      const AB = Math.pow(P_pr, 2) / (27 * Math.pow(T_pr, 7 / 2));
-      Z = 1;
-      do {
-        z0 = Z;
-        fz0 = Math.pow(z0, 3) - Math.pow(z0, 2) - (b * b + b - A) * z0 - AB;
-        dfdz = 3 * Math.pow(z0, 2) - 2 * z0 - (b * b + b - A);
-        Z = z0 - fz0 / dfdz;
-        i++;
-      } while (Math.abs(Z - z0) > 0.00001 && i < 100);
-      if (i >= 100) return 999;
-      return Z;
-    } else {
-      throw new Error("Z_RedlichKwong1949: Out of correlation limits");
+  */
+
+  // Redlich-Kwong (1949) using Newton's method on Z directly.
+  export function Z_RedlichKwong1949(Ppr: number, Tpr: number): number {
+    if (!(Ppr >= 0 && Ppr < 15 && Tpr > 1 && Tpr <= 3)) {
+      throw new Error("Z_RedlichKwong1949: out of recommended correlation limits");
     }
+    console.log("Ppr and Tpr in Z_RedlichKwong1949:", Ppr, Tpr)
+    const u = Math.pow(2, 1 / 3) - 1;
+    const A = Ppr / (9 * u * Math.pow(Tpr, 5 / 2));
+    const b = (Ppr * u) / (3 * Tpr);
+    const AB = Math.pow(Ppr, 2) / (27 * Math.pow(Tpr, 7 / 2));
+
+    let Z = 1;
+    let iteration = 0;
+    const maxIter = 100;
+    const tol = 1e-5;
+
+    while (iteration < maxIter) {
+      const Zold = Z;
+      const f = Math.pow(Zold, 3) - Math.pow(Zold, 2) - (b * b + b - A) * Zold - AB;
+      const df = 3 * Math.pow(Zold, 2) - 2 * Zold - (b * b + b - A);
+      Z = Zold - f / df;
+      if (Math.abs(Z - Zold) < tol) return Z;
+      iteration++;
+    }
+    return 999;
   }
   
   /**

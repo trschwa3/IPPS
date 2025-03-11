@@ -66,13 +66,14 @@
   .nodal-analysis-form input[type="text"],
   .nodal-analysis-form select {
     display: block !important;
-    width: 70%;
-    max-width: 320px;
+    width: 100%;
+    max-width: none;
     padding: 0.4rem;
     border: 1px solid #ccc;
     border-radius: 4px;
     font-size: 0.9rem;
   }
+  
   
   /* The unit-label => block so it appears on its own line under the input. 
      If you want it on the same line, change to inline-block. */
