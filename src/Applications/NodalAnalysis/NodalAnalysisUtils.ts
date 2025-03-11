@@ -255,22 +255,7 @@ export function calculateIPR(params: any, iprPhase: string, flowRegime: string, 
     spacingMethod,
     spacingValue,
   }: any) {
-    /*
-      Two-phase pseudo-steady IPR:
-        J = (k * h) / (141.2 * Bo * muo) / [ ln(re/rw) - 0.75 + s ]
-        
-        For p_wf >= pb (above bubble point):
-           q = J * (pavg - p_wf)
-        For p_wf < pb (below bubble point, Vogel region):
-           q = q_bubble + q_vmax * (1 - 0.2*(p_wf/pb) - 0.8*(p_wf/pb)^2)
-        where:
-           q_bubble = J*(pavg - pb)
-           q_vmax = q_bubble / 1.8
-  
-      In the saturated case (pavg ≤ pb) we use a pure Vogel:
-           q = (J * pavg / 1.8) * [1 - 0.2*(p_wf/pavg) - 0.8*(p_wf/pavg)^2]
-    */
-  
+
     const points: { p_wf: number; q_o: number }[] = [];
     const method = spacingMethod || '';
     const val = spacingValue || 0;
@@ -292,10 +277,8 @@ export function calculateIPR(params: any, iprPhase: string, flowRegime: string, 
       } else {
         // pavg > pb:
         if (p_wf >= pb) {
-          // Single-phase Darcy region:
           return J * (pavg - p_wf);
         } else {
-          // Two-phase (Vogel) region:
           return J * (pavg - pb) + (J * pb / (1+a)) * (1 - (1-a) * (p_wf / pb) - a * Math.pow(p_wf / pb, 2));
         }
       }
@@ -304,9 +287,7 @@ export function calculateIPR(params: any, iprPhase: string, flowRegime: string, 
     // DeltaQ inversion function
     function invertFlow(q: number): number | null {
       if (pavg <= pb) {
-        // Saturated: invert q = (J*pavg/1.8) * [1 - 0.2*x - 0.8*x^2] where x = p_wf/pavg.
         const A_sat = J * pavg / (1+a);
-        // Rearranged quadratic: 0.8*x^2 + 0.2*x + (q/A_sat - 1) = 0.
         const A_coef = a;
         const B_coef = 1-a;
         const C_coef = (q / A_sat) - 1;
@@ -325,11 +306,10 @@ export function calculateIPR(params: any, iprPhase: string, flowRegime: string, 
         if (p_wf_single >= pb) {
           return p_wf_single;
         }
-        // Otherwise, in the two-phase (Vogel) region.
-        // In this region: q = J*(pavg - pb) + (J*pb/1.8)*[1 - 0.2*(p_wf/pb) - 0.8*(p_wf/pb)^2].
+        //two phaseregion
         const Q_offset = J * (pavg - pb);
         const A_vog = J * pb / (1+a);
-        // Solve: 0.8*x^2 + 0.2*x + ((q - Q_offset)/A_vog - 1) = 0, where x = p_wf / pb.
+
         const A_coef = a;
         const B_coef = 1-a;
         const C_coef = ((q - Q_offset) / A_vog) - 1;
@@ -351,7 +331,7 @@ export function calculateIPR(params: any, iprPhase: string, flowRegime: string, 
       let qMax: number;
       if (pavg <= pb) {
         // Saturated case: maximum flow occurs at p_wf = 0.
-        qMax = (J * pavg) / 1.8;  // because getFlow(0) = J*pavg/1.8.
+        qMax = (J * pavg) / (1+a); 
       } else {
         // For pavg > pb, maximum flow in single-phase is J*pavg, while in Vogel region it's q_bubble + q_vmax.
         const q_singleMax = J * pavg;
@@ -432,7 +412,7 @@ export function calculateIPR(params: any, iprPhase: string, flowRegime: string, 
           // Here, we linearly span p_wf from p_avg down to 0.
           const frac = i / (N - 1);
           const p_wf = p_avg * (1 - frac);
-          const q_o = getGasFlow(p_wf) / 1000;
+          const q_o = getGasFlow(p_wf);
           points.push({ p_wf, q_o });
         }
         return points;
@@ -440,7 +420,7 @@ export function calculateIPR(params: any, iprPhase: string, flowRegime: string, 
         const deltaP = val > 0 ? val : 100;
         let p_wf = p_avg;
         while (p_wf >= 0) {
-          const q_o = getGasFlow(p_wf) / 1000;
+          const q_o = getGasFlow(p_wf);
           points.push({ p_wf, q_o });
           p_wf -= deltaP;
         }
@@ -490,7 +470,8 @@ export function calculateIPR(params: any, iprPhase: string, flowRegime: string, 
           // Here, we linearly span p_wf from p_avg down to 0.
           const frac = i / (N - 1);
           const p_wf = pe * (1 - frac);
-          const q_o = getGasFlow(p_wf) / 1000;
+          const q_o = getGasFlow(p_wf);
+          console.log("gas flow value of:", q_o, "MCF/d");
           points.push({ p_wf, q_o });
         }
         return points;
@@ -498,7 +479,7 @@ export function calculateIPR(params: any, iprPhase: string, flowRegime: string, 
         const deltaP = val > 0 ? val : 100;
         let p_wf = pe;
         while (p_wf >= 0) {
-          const q_o = getGasFlow(p_wf) / 1000;
+          const q_o = getGasFlow(p_wf);
           points.push({ p_wf, q_o });
           p_wf -= deltaP;
         }
@@ -568,7 +549,8 @@ export function calculateIPR(params: any, iprPhase: string, flowRegime: string, 
           const frac = i / (N - 1);
           const p_wf = pi * (1 - frac); // e.g. from pi down to 0
           if (p_wf <= 0) break;
-          const q_o = getGasFlow(p_wf) / 1000; //mcf/d
+          const q_o = getGasFlow(p_wf); //mcf/d
+          console.log("gas flow value of:", q_o, "MCF/d");
           points.push({ p_wf, q_o });
         }
         return points;
@@ -576,7 +558,7 @@ export function calculateIPR(params: any, iprPhase: string, flowRegime: string, 
         const deltaP = val > 0 ? val : 100;
         let p_wf = pi;
         while (p_wf > 0) {
-          const q_o = getGasFlow(p_wf) / 1000; //mcf/d
+          const q_o = getGasFlow(p_wf); //mcf/d
           points.push({ p_wf, q_o });
           p_wf -= deltaP;
         }
