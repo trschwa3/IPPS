@@ -398,8 +398,9 @@ export function calculateIPR(params: any, iprPhase: string, flowRegime: string, 
       const defaultN = 25;
 
       function getGasFlow(p_wf: number): number {
-        const mu_avg = (gas_visc_PT(p_wf, T_res, sg_g) + gas_visc_PT(p_avg, T_res, sg_g))/2 ; //T in f
-        const z_avg = (z_PT(p_wf, T_res, sg_g, zMethodCode) + z_PT(p_avg, T_res, sg_g, zMethodCode))/2;   
+        const mu_avg = gas_visc_PT((p_wf+p_avg)/2, T_res, sg_g); //T in f
+        const z_avg = z_PT((p_wf+p_avg)/2, T_res, sg_g, zMethodCode);   
+        console.log ("mu avg", mu_avg, "z_avg", z_avg, "@ pwf", p_wf);
         const delta_m = (Math.pow(p_avg,2) - Math.pow(p_wf,2))/(mu_avg * z_avg);
         return J * delta_m;
         } 
@@ -457,8 +458,8 @@ export function calculateIPR(params: any, iprPhase: string, flowRegime: string, 
     
       // 4) getGasFlow
       function getGasFlow(p_wf: number): number {
-        const mu_avg = (gas_visc_PT(p_wf, T_res, sg_g) + gas_visc_PT(pe, T_res, sg_g))/2 ; //T in f
-        const z_avg = (z_PT(p_wf, T_res, sg_g, zMethodCode) + z_PT(pe, T_res, sg_g, zMethodCode))/2;   
+        const mu_avg = gas_visc_PT((p_wf+pe)/2, T_res, sg_g); //T in f
+        const z_avg = z_PT((p_wf+pe)/2, T_res, sg_g, zMethodCode);   
         const delta_m = (Math.pow(pe,2) - Math.pow(p_wf,2))/(mu_avg * z_avg);
         return J * delta_m;
         } 
@@ -510,16 +511,9 @@ export function calculateIPR(params: any, iprPhase: string, flowRegime: string, 
       // 2) Compute the "factor" from the transient formula
       console.log(zMethodCode);
       const logTerm =
-        Math.log(t) +
-        Math.log(k / (phi * 0.01 * gas_visc_PT(pi, T_res, sg_g) * ct * rw * rw)) -
-        3.23 +
-        0.869 * s;
+        Math.log(t) + Math.log(k / (phi * 0.01 * gas_visc_PT(pi, T_res, sg_g) * ct * rw * rw)) - 3.23 + 0.869 * s;
 
       const factor = (k * h) / (1424 * (T_res + 459.67) * logTerm);
-      const mu_pi = gas_visc_PT(pi, T_res, sg_g);
-      const z_pi = z_PT(pi, T_res, sg_g, zMethodCode);
-      console.log("mui value of:", mu_pi);
-      console.log("zi value of:", z_pi);
       // 3) Prepare the output array
       const points: { p_wf: number; q_o: number }[] = [];
       const methodUsed = spacingMethod || "";
@@ -530,11 +524,9 @@ export function calculateIPR(params: any, iprPhase: string, flowRegime: string, 
         // Compute average mu and z by sampling at p_wf and pi
         //console.log("getting mu values")
         //console.log("pwf, pi, tres", p_wf, pi, T_res);
-        const mu_wf = gas_visc_PT(p_wf, T_res, sg_g);
-        const mu_avg = (mu_wf + mu_pi) / 2;
+        const mu_avg = gas_visc_PT((p_wf+pi)/2, T_res, sg_g);
         //console.log("mu avg value of:", mu_avg);
-        const z_wf = z_PT(p_wf, T_res, sg_g, zMethodCode);
-        const z_avg = (z_wf + z_pi) / 2;
+        const z_avg = z_PT((p_wf+pi)/2, T_res, sg_g, zMethodCode);
         //console.log("z value of:", z_avg);
           const delta_m = (pi * pi - p_wf * p_wf) / (mu_avg * z_avg);
           return factor * delta_m;
