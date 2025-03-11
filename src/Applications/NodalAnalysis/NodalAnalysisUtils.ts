@@ -251,6 +251,7 @@ export function calculateIPR(params: any, iprPhase: string, flowRegime: string, 
     pb,   // Bubble point / saturation pressure (assumed already in psi)
     re,
     rw,
+    a, // fetkovich to vogel
     spacingMethod,
     spacingValue,
   }: any) {
@@ -287,7 +288,7 @@ export function calculateIPR(params: any, iprPhase: string, flowRegime: string, 
     function getFlow(p_wf: number): number {
       if (pavg <= pb) {
         // Entire reservoir below bubble point:
-        return (J * pavg / 1.8) * (1 - 0.2 * (p_wf / pavg) - 0.8 * Math.pow(p_wf / pavg, 2));
+        return (J * pavg / (1+a)) * (1 - (1-a) * (p_wf / pavg) - a * Math.pow(p_wf / pavg, 2));
       } else {
         // pavg > pb:
         if (p_wf >= pb) {
@@ -295,7 +296,7 @@ export function calculateIPR(params: any, iprPhase: string, flowRegime: string, 
           return J * (pavg - p_wf);
         } else {
           // Two-phase (Vogel) region:
-          return J * (pavg - pb) + (J * pb / 1.8) * (1 - 0.2 * (p_wf / pb) - 0.8 * Math.pow(p_wf / pb, 2));
+          return J * (pavg - pb) + (J * pb / (1+a)) * (1 - (1-a) * (p_wf / pb) - a * Math.pow(p_wf / pb, 2));
         }
       }
     }
@@ -304,10 +305,10 @@ export function calculateIPR(params: any, iprPhase: string, flowRegime: string, 
     function invertFlow(q: number): number | null {
       if (pavg <= pb) {
         // Saturated: invert q = (J*pavg/1.8) * [1 - 0.2*x - 0.8*x^2] where x = p_wf/pavg.
-        const A_sat = J * pavg / 1.8;
+        const A_sat = J * pavg / (1+a);
         // Rearranged quadratic: 0.8*x^2 + 0.2*x + (q/A_sat - 1) = 0.
-        const A_coef = 0.8;
-        const B_coef = 0.2;
+        const A_coef = a;
+        const B_coef = 1-a;
         const C_coef = (q / A_sat) - 1;
         const disc = B_coef * B_coef - 4 * A_coef * C_coef;
         if (disc < 0) return null;
@@ -327,10 +328,10 @@ export function calculateIPR(params: any, iprPhase: string, flowRegime: string, 
         // Otherwise, in the two-phase (Vogel) region.
         // In this region: q = J*(pavg - pb) + (J*pb/1.8)*[1 - 0.2*(p_wf/pb) - 0.8*(p_wf/pb)^2].
         const Q_offset = J * (pavg - pb);
-        const A_vog = J * pb / 1.8;
+        const A_vog = J * pb / (1+a);
         // Solve: 0.8*x^2 + 0.2*x + ((q - Q_offset)/A_vog - 1) = 0, where x = p_wf / pb.
-        const A_coef = 0.8;
-        const B_coef = 0.2;
+        const A_coef = a;
+        const B_coef = 1-a;
         const C_coef = ((q - Q_offset) / A_vog) - 1;
         const disc = B_coef * B_coef - 4 * A_coef * C_coef;
         if (disc < 0) return null;
