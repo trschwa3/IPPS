@@ -136,12 +136,12 @@ const NodalAnalysisForm: React.FC<NodalAnalysisFormProps> = ({
   ];
 
   // Spacing methods
-  let spacingMethods = ['NumPoints', 'Delta Pressure', 'Delta Flowrate'];
+  let spacingMethods = ['Number of Points', 'Delta Pressure', 'Delta Flowrate'];
   if (iprPhase === 'Gas' || iprPhase === 'Two-phase') {
-    spacingMethods = ['NumPoints', 'Delta Pressure', 'Delta Flowrate'];
+    spacingMethods = ['Number of Points', 'Delta Pressure', 'Delta Flowrate'];
   }
   if (iprPhase === 'Gas') {
-    spacingMethods = ['NumPoints', 'Delta Pressure'];
+    spacingMethods = ['Number of Points', 'Delta Pressure'];
   }
 
   // Get the user's unit definitions as a Record<string, string>
@@ -413,7 +413,7 @@ const NodalAnalysisForm: React.FC<NodalAnalysisFormProps> = ({
             style={inputStyle}
           />
           <span style={unitStyle}>
-            {formValues.spacingMethod === 'NumPoints'
+            {formValues.spacingMethod === 'Number of Points'
               ? 'points'
               : formValues.spacingMethod === 'Delta Pressure'
               ? userUnitsTyped['pressure'] || 'psi'

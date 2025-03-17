@@ -73,15 +73,15 @@ export function calculateIPR(params: any, iprPhase: string, flowRegime: string, 
   
     const factor = (k * h) / (162.6 * Bo * muo);
   
-    if (method === 'NumPoints') {
+    if (method === 'Number of Points') {
       const N = val > 0 ? val : defaultN; // if user typed 50, use 50. Otherwise 100
       for (let i = 0; i < N; i++) {
         const frac = i / (N - 1); // so last point is fraction=1
-        const p_wf = pi * (1 - frac * 0.8); // from pi down to 0.2 * pi
+        const p_wf = pi * (1 - frac); // from pi down to 0.2 * pi
         const q_o = factor * (pi - p_wf) / logTerm;
         points.push({ p_wf, q_o });
       }
-    } else if (method === 'DeltaP') {
+    } else if (method === "Delta Pressure") {
       const deltaP = val > 0 ? val : 100; // fallback if user didn't input
       let p_wf = pi;
       while (p_wf > 0) {
@@ -89,7 +89,7 @@ export function calculateIPR(params: any, iprPhase: string, flowRegime: string, 
         points.push({ p_wf, q_o });
         p_wf -= deltaP;
       }
-    } else if (method === 'DeltaQ') {
+    } else if (method === 'Delta Flowrate') {
       // We invert to solve for p_wf given q_o:
       // q_o = factor*(pi - p_wf)/logTerm => p_wf = pi - q_o*(logTerm/factor)
       const dq = val > 0 ? val : 50;
@@ -105,7 +105,7 @@ export function calculateIPR(params: any, iprPhase: string, flowRegime: string, 
       const N = defaultN;
       for (let i = 0; i < N; i++) {
         const frac = i / (N - 1);
-        const p_wf = pi * (1 - frac * 0.8);
+        const p_wf = pi * (1 - frac);
         const q_o = factor * (pi - p_wf) / logTerm;
         points.push({ p_wf, q_o });
       }
@@ -138,15 +138,15 @@ export function calculateIPR(params: any, iprPhase: string, flowRegime: string, 
     const denom = Math.log(re / rw) - 0.75 + s;
     const factor = (k * h) / (141.2 * Bo * muo) / denom;
   
-    if (method === 'NumPoints') {
+    if (method === 'Number of Points') {
       const N = val > 0 ? val : defaultN;
       for (let i = 0; i < N; i++) {
         const frac = i / (N - 1);
-        const p_wf = pavg * (1 - frac * 0.8);
+        const p_wf = pavg * (1 - frac);
         const q_o = factor * (pavg - p_wf);
         points.push({ p_wf, q_o });
       }
-    } else if (method === 'DeltaP') {
+    } else if (method === "Delta Pressure") {
       const deltaP = val > 0 ? val : 100;
       let p_wf = pavg;
       while (p_wf > 0) {
@@ -154,7 +154,7 @@ export function calculateIPR(params: any, iprPhase: string, flowRegime: string, 
         points.push({ p_wf, q_o });
         p_wf -= deltaP;
       }
-    } else if (method === 'DeltaQ') {
+    } else if (method === 'Delta Flowrate') {
       // invert: q = factor*(pavg - p_wf) => p_wf = pavg - q/factor
       const dq = val > 0 ? val : 50;
       // approximate max flow if p_wf=0
@@ -169,7 +169,7 @@ export function calculateIPR(params: any, iprPhase: string, flowRegime: string, 
       const N = defaultN;
       for (let i = 0; i < N; i++) {
         const frac = i / (N - 1);
-        const p_wf = pavg * (1 - frac * 0.8);
+        const p_wf = pavg * (1 - frac);
         const q_o = factor * (pavg - p_wf);
         points.push({ p_wf, q_o });
       }
@@ -202,15 +202,15 @@ export function calculateIPR(params: any, iprPhase: string, flowRegime: string, 
     const denom = Math.log(re / rw) + s;
     const factor = (k * h) / (141.2 * Bo * muo) / denom;
   
-    if (method === 'NumPoints') {
+    if (method === 'Number of Points') {
       const N = val > 0 ? val : defaultN;
       for (let i = 0; i < N; i++) {
         const frac = i / (N - 1);
-        const p_wf = pe * (1 - frac * 0.8);
+        const p_wf = pe * (1 - frac);
         const q_o = factor * (pe - p_wf);
         points.push({ p_wf, q_o });
       }
-    } else if (method === 'DeltaP') {
+    } else if (method === 'Delta Pressure') {
       const deltaP = val > 0 ? val : 100;
       let p_wf = pe;
       while (p_wf > 0) {
@@ -218,7 +218,7 @@ export function calculateIPR(params: any, iprPhase: string, flowRegime: string, 
         points.push({ p_wf, q_o });
         p_wf -= deltaP;
       }
-    } else if (method === 'DeltaQ') {
+    } else if (method === 'Delta Flowrate') {
       // invert: q = factor*(pe - p_wf) => p_wf = pe - q/factor
       const dq = val > 0 ? val : 50;
       const qMax = factor * pe;
@@ -232,7 +232,7 @@ export function calculateIPR(params: any, iprPhase: string, flowRegime: string, 
       const N = defaultN;
       for (let i = 0; i < N; i++) {
         const frac = i / (N - 1);
-        const p_wf = pe * (1 - frac * 0.8);
+        const p_wf = pe * (1 - frac);
         const q_o = factor * (pe - p_wf);
         points.push({ p_wf, q_o });
       }
@@ -326,7 +326,7 @@ export function calculateIPR(params: any, iprPhase: string, flowRegime: string, 
     }
   
     // DeltaQ branch: step in flow increments (q) and invert to get p_wf.
-    if (method === 'DeltaQ') {
+    if (method === 'Delta Flowrate') {
       const dq = val > 0 ? val : 50;
       let qMax: number;
       if (pavg <= pb) {
@@ -348,7 +348,7 @@ export function calculateIPR(params: any, iprPhase: string, flowRegime: string, 
       return points;
     }
     // For NumPoints (or default) and DeltaP, use the forward approach.
-    else if (method === 'NumPoints' || method === '') {
+    else if (method === 'Number of Points' || method === '') {
       const N = val > 0 ? val : defaultN;
       for (let i = 0; i < N; i++) {
         const frac = i / (N - 1);
@@ -358,7 +358,7 @@ export function calculateIPR(params: any, iprPhase: string, flowRegime: string, 
         points.push({ p_wf, q_o });
       }
       return points;
-    } else if (method === 'DeltaP') {
+    } else if (method === "Delta Pressure") {
       const deltaP = val > 0 ? val : 100;
       let p_wf = pavg;
       while (p_wf >= 0) {
@@ -407,7 +407,7 @@ export function calculateIPR(params: any, iprPhase: string, flowRegime: string, 
       
       
       // 5. Implement the spacing methods. (Here we show the "NumPoints" approach.)
-      if (methodUsed === 'NumPoints' || methodUsed === '') {
+      if (methodUsed === 'Number of Points' || methodUsed === '') {
         const N = val > 0 ? val : defaultN;
         for (let i = 0; i < N; i++) {
           // Here, we linearly span p_wf from p_avg down to 0.
@@ -417,7 +417,7 @@ export function calculateIPR(params: any, iprPhase: string, flowRegime: string, 
           points.push({ p_wf, q_o });
         }
         return points;
-      } else if (methodUsed === 'DeltaP') {
+      } else if (methodUsed === "Delta Pressure") {
         const deltaP = val > 0 ? val : 100;
         let p_wf = p_avg;
         while (p_wf >= 0) {
@@ -465,7 +465,7 @@ export function calculateIPR(params: any, iprPhase: string, flowRegime: string, 
         } 
     
       // 5) spacing
-      if (methodUsed === 'NumPoints' || methodUsed === '') {
+      if (methodUsed === 'Number of Points' || methodUsed === '') {
         const N = val > 0 ? val : defaultN;
         for (let i = 0; i < N; i++) {
           // Here, we linearly span p_wf from p_avg down to 0.
@@ -476,7 +476,7 @@ export function calculateIPR(params: any, iprPhase: string, flowRegime: string, 
           points.push({ p_wf, q_o });
         }
         return points;
-      } else if (methodUsed === 'DeltaP') {
+      } else if (methodUsed === "Delta Pressure") {
         const deltaP = val > 0 ? val : 100;
         let p_wf = pe;
         while (p_wf >= 0) {
@@ -531,7 +531,7 @@ export function calculateIPR(params: any, iprPhase: string, flowRegime: string, 
       }
     
       // 5) Implement spacing methods
-      if (methodUsed === "NumPoints" || methodUsed === "") {
+      if (methodUsed === 'Number of Points' || methodUsed === "") {
         const N = val > 0 ? val : defaultN;
         for (let i = 0; i < N; i++) {
           // linearly span from pi down to 0
@@ -543,7 +543,7 @@ export function calculateIPR(params: any, iprPhase: string, flowRegime: string, 
           points.push({ p_wf, q_o });
         }
         return points;
-      } else if (methodUsed === "DeltaP") {
+      } else if (methodUsed === "Delta Pressure") {
         const deltaP = val > 0 ? val : 100;
         let p_wf = pi;
         while (p_wf > 0) {
