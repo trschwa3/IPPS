@@ -47,8 +47,6 @@ const NodalResults: React.FC<NodalResultsProps> = ({
         <p>No OPR data calculated yet.</p>
       )}
 
-      {/* If you want a chart, you can integrate it here too, 
-          or pass iprData to a separate Chart component */}
     </div>
   );
 };

@@ -521,9 +521,6 @@ export function calculateIPR(params: any, iprPhase: string, flowRegime: string, 
       const defaultN = 25;
       // 4) Helper function: average gas properties between p_wf and pi, then compute Δm
       function getGasFlow(p_wf: number): number {
-        // Compute average mu and z by sampling at p_wf and pi
-        //console.log("getting mu values")
-        //console.log("pwf, pi, tres", p_wf, pi, T_res);
         const mu_avg = gas_visc_PT((p_wf+pi)/2, T_res, sg_g);
         //console.log("mu avg value of:", mu_avg);
         const z_avg = z_PT((p_wf+pi)/2, T_res, sg_g, zMethodCode);
