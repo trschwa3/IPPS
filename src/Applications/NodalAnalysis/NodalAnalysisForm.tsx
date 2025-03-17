@@ -466,7 +466,7 @@ const NodalAnalysisForm: React.FC<NodalAnalysisFormProps> = ({
         <>
           <div style={rowStyle}>
             <label style={labelStyle}>
-              Avg Reservoir Pressure, pavg<sub>avg</sub>:
+              Avg Reservoir Pressure, p<sub>avg</sub>:
             </label>
             <input
               type="number"
@@ -701,7 +701,7 @@ const NodalAnalysisForm: React.FC<NodalAnalysisFormProps> = ({
       {iprPhase === 'Gas' && flowRegime === 'Pseudosteady-State' && (
         <>
           <div style={rowStyle}>
-            <label style={labelStyle}>Average Reservoir Pressure, pavg:</label>
+            <label style={labelStyle}>Average Reservoir Pressure, p<sub>avg</sub>:</label>
             <input
               type="number"
               step="any"
