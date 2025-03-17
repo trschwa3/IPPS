@@ -1,5 +1,67 @@
 import React, { useEffect } from 'react';
 import unitSystems from '../../unit/unitSystems.json';
+import UnitConverter from '../../unit/UnitConverter';
+
+// --- Field configuration types and dictionaries ---
+
+export interface FieldConfig {
+  name: string;
+  label: string;
+  dimension: string; // used to select conversion factors (e.g. "pressure", "length", etc.)
+  baseMin?: number;
+  baseMax?: number;
+  unit: string; // the base unit for the field (e.g., "psi")
+}
+
+// Oil common fields
+export const oilCommonFields: FieldConfig[] = [
+  { name: 'k',   label: 'Permeability, k',        dimension: 'permeability', baseMin: 1e-6,   unit: 'mD'       },
+  { name: 'h',   label: 'Thickness, h',           dimension: 'length',       baseMin: 1,   unit: 'ft'       },
+  { name: 'Bo',  label: 'Formation Vol. Factor, B₀', dimension: 'oil FVF',  baseMin: 0.1,   unit: 'bbl/STB'  },
+  { name: 'muo', label: 'Oil Viscosity, μ₀',      dimension: 'viscosity',    baseMin: 0.01,   unit: 'cp'       },
+  { name: 's',   label: 'Skin Factor, s',         dimension: 'skin',         baseMin: -7,  baseMax: 100, unit: 'dimensionless' },
+  { name: 'rw',  label: 'Well Radius, rₒ',        dimension: 'length',       baseMin: 0.01,   unit: 'ft'       },
+];
+
+// Gas common fields
+export const gasCommonFields: FieldConfig[] = [
+  { name: 'k',    label: 'Permeability, k',      dimension: 'permeability', baseMin: 0,    unit: 'mD'   },
+  { name: 'h',    label: 'Thickness, h',         dimension: 'length',       baseMin: 1,    unit: 'ft'   },
+  { name: 's',    label: 'Skin Factor, s',       dimension: 'skin',         baseMin: -7,   baseMax: 100, unit: 'dimensionless' },
+  { name: 'rw',   label: 'Well Radius, rₒ',      dimension: 'length',       baseMin: 0.01, baseMax: 1,   unit: 'ft' },
+  { name: 'sg_g', label: 'Gas Specific Gravity, Sg', dimension: 'gasSG',    baseMin: 0.56, baseMax: 1,   unit: 'dimensionless' },
+  { name: 'T_res',label: 'Reservoir Temperature, Tᵣ', dimension: 'temperature', baseMin: 100, baseMax: 350, unit: '°F' },
+];
+
+// Liquid transient fields
+export const TransientFields: FieldConfig[] = [
+  { name: 'phi', label: 'Porosity, φ (%)',           dimension: 'porosity',       baseMin: 1,    baseMax: 50,   unit: '%'     },
+  { name: 'ct',  label: 'Total Compressibility, cₜ', dimension: 'compressibility', baseMin: 1e-7, baseMax: 1e-3, unit: 'psi⁻¹' },
+  { name: 't',   label: 'Time, t',                   dimension: 'time',            baseMin: 1e-3, baseMax: 10000, unit: 'hrs'   },
+  { name: 'pi',  label: 'Initial Reservoir Pressure, pi', dimension: 'pressure',  baseMin: 500,  baseMax: 20000, unit: 'psi'   },
+];
+
+// Pseudosteady fields (for both oil and gas)
+export const PseudosteadyFields: FieldConfig[] = [
+  { name: 'pavg', label: 'Average Reservoir Pressure, pavg', dimension: 'pressure', baseMin: 500, baseMax: 20000, unit: 'psi' },
+  { name: 're',   label: 'Reservoir Radius, rᵣ',            dimension: 'length',   baseMin: 0.1, unit: 'ft'      },
+];
+
+// Steady-state fields (for both oil and gas)
+export const SteadystateFields: FieldConfig[] = [
+  { name: 'pe', label: 'Boundary Pressure, pe', dimension: 'pressure', baseMin: 500,  baseMax: 20000, unit: 'psi' },
+  { name: 're', label: 'Reservoir Radius, rᵣ',  dimension: 'length',   baseMin: 0.1,  unit: 'ft'      },
+];
+
+// Two-phase fields (for two-phase calculations)
+export const TwoPhaseFields: FieldConfig[] = [
+  { name: 'pavg', label: 'Average Reservoir Pressure, pavg', dimension: 'pressure', baseMin: 500,  baseMax: 20000, unit: 'psi' },
+  { name: 'pb',   label: 'Saturation Pressure, pb',           dimension: 'pressure', baseMin: 300,  baseMax: 5000,  unit: 'psi' },
+  { name: 'a',    label: 'Bowedness, a',                      dimension: 'bowedness', baseMin: 0.8, baseMax: 1,     unit: 'dimensionless' },
+  { name: 're',   label: 'Reservoir Radius, rᵣ',              dimension: 'length',    baseMin: 0.1, unit: 'ft'      },
+];
+
+// --- Component Props & Main Component ---
 
 interface NodalAnalysisFormProps {
   iprPhase: string;
@@ -14,6 +76,28 @@ interface NodalAnalysisFormProps {
   selectedUnitSystem: string;
 }
 
+/** A helper that formats numeric limits with “smart” rules:
+ *  - If abs(value) < 1e-3 or >= 1e4, show e-notation with 1 decimal (e.g. 1.0e-6)
+ *  - If >= 100, show as integer
+ *  - Else show up to 2 decimals
+ */
+function formatLimit(value: number): string {
+  if (value === 0) return '0';
+  const absVal = Math.abs(value);
+  if (absVal <= 1e-3 || absVal >= 1e4) {
+    // exponential with 1 digit
+    return value.toExponential(1).replace('+', ''); 
+  } else if (absVal >= 100) {
+    // integer
+    return Math.round(value).toString();
+  } else {
+    // up to 2 decimals
+    return value.toLocaleString(undefined, {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 2,
+    });
+  }
+}
 
 const NodalAnalysisForm: React.FC<NodalAnalysisFormProps> = ({
   iprPhase,
@@ -27,69 +111,69 @@ const NodalAnalysisForm: React.FC<NodalAnalysisFormProps> = ({
   onCalculate,
   selectedUnitSystem,
 }) => {
-  
   const [errors, setErrors] = React.useState<{ [key: string]: string }>({});
-   
 
+  // Force pseudosteady-state for Two-phase
   useEffect(() => {
     if (iprPhase === 'Two-phase' && flowRegime !== 'Pseudosteady-State') {
       setFlowRegime('Pseudosteady-State');
     }
   }, [iprPhase, flowRegime, setFlowRegime]);
 
-  const gas_oil_phaseOptions = ['Liquid', 'Two-phase', 'Gas'];
-  const regimeOptions = ['Transient', 'Pseudosteady-State', 'Steady-State'];
-  const zmethodOptions = ['Dranchuk & Abou-Kassem - 1975', 'Dranchuk, Purvis & Robinson - 1974', 
-                          'Redlich Kwong - 1949', 'Brill & Beggs - 1974']
-  let spacingMethods = ['NumPoints', 'DeltaP', 'DeltaQ'];
-  if (iprPhase === 'Gas' || iprPhase === "Two-phase") {
-    spacingMethods = ['NumPoints', 'DeltaP', 'DeltaQ'];
+  const gasOilPhaseOptions = ['Liquid', 'Two-phase', 'Gas'];
+  // For Two-phase, only Pseudosteady-State is allowed; otherwise, all three are allowed.
+  const regimeOptions =
+    iprPhase === 'Two-phase'
+      ? ['Pseudosteady-State']
+      : ['Transient', 'Pseudosteady-State', 'Steady-State'];
+
+  // For Gas, show the z‑method dropdown.
+  const zmethodOptions = [
+    'Dranchuk & Abou-Kassem - 1975',
+    'Dranchuk, Purvis & Robinson - 1974',
+    'Redlich Kwong - 1949',
+    'Brill & Beggs - 1974',
+  ];
+
+  // Spacing methods
+  let spacingMethods = ['NumPoints', 'Delta Pressure', 'Delta Flowrate'];
+  if (iprPhase === 'Gas' || iprPhase === 'Two-phase') {
+    spacingMethods = ['NumPoints', 'Delta Pressure', 'Delta Flowrate'];
   }
   if (iprPhase === 'Gas') {
-    spacingMethods = ['NumPoints', 'DeltaP'];
+    spacingMethods = ['NumPoints', 'Delta Pressure'];
   }
-  
-  // Identify units from JSON (or fallback to Oil Field style)
-  const userUnits = unitSystems[selectedUnitSystem as keyof typeof unitSystems] || {};
 
-  // Disable fields if phase or (for Liquid & gas) flow regime is not selected
-  const canEditFields =
-    iprPhase !== '' && (iprPhase !== 'Liquid' || flowRegime !== '');
+  // Get the user's unit definitions as a Record<string, string>
+  const userUnitsTyped = (unitSystems[selectedUnitSystem as keyof typeof unitSystems] ||
+    {}) as Record<string, string>;
 
-  /** Reusable numeric input handler */
+  // Enable editing only if iprPhase is selected and, for liquids, flowRegime is selected.
+  const canEditFields = iprPhase !== '' && (iprPhase !== 'Liquid' || flowRegime !== '');
+
+  /** Handler for numeric inputs */
   const handleNumericChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
-    
-    // If user clears the input
-    if (value === "") {
-      setErrors((prev) => ({ ...prev, [name]: "" }));
-      setFormValues((prev: any) => ({ ...prev, [name]: "" }));
+    if (value === '') {
+      // User cleared the field
+      setErrors((prev) => ({ ...prev, [name]: '' }));
+      setFormValues((prev: any) => ({ ...prev, [name]: '' }));
       return;
     }
-  
     let parsed = parseFloat(value);
-  
-    // Example special case for 'pb'
-    if (name === "pb" && isNaN(parsed)) {
+    if (isNaN(parsed)) {
+      parsed = 0; // or do something else
+    }
+    // Example: special logic for pb if needed
+    if (name === 'pb' && isNaN(parsed)) {
       parsed = formValues.pavg || 3000;
     }
-  
-    // 1) Validate using our helper
     const errorMsg = validateField(name, parsed);
-  
-    // 2) Update error state
     setErrors((prev) => ({ ...prev, [name]: errorMsg }));
-  
-    // 3) Update the form value
-    setFormValues((prev: any) => ({
-      ...prev,
-      [name]: parsed,
-    }));
+    setFormValues((prev: any) => ({ ...prev, [name]: parsed }));
   };
-  
-  
 
-  /** Reusable select/text input handler */
+  /** Handler for text/select inputs */
   const handleTextChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const { name, value } = e.target;
     if (name === 'iprPhase') {
@@ -99,11 +183,9 @@ const NodalAnalysisForm: React.FC<NodalAnalysisFormProps> = ({
     } else if (name === 'zMethod') {
       setzMethod(value);
     } else {
-      setFormValues((prev: any) => ({
-        ...prev,
-        [name]: value,
-      }));
-    }} 
+      setFormValues((prev: any) => ({ ...prev, [name]: value }));
+    }
+  };
 
   // Inline style helpers
   const rowStyle: React.CSSProperties = {
@@ -121,128 +203,84 @@ const NodalAnalysisForm: React.FC<NodalAnalysisFormProps> = ({
     marginRight: '0.5rem',
   };
   const selectStyle: React.CSSProperties = {
-    width: '220px', // or 100% if you prefer
+    width: '220px',
     marginRight: '0.5rem',
-  };  
+  };
   const unitStyle: React.CSSProperties = {
     fontStyle: 'italic',
     color: '#666',
   };
 
-  const oilcommonFields = [
-    { name: 'k', label: 'Permeability, k', unit: userUnits.permeability || 'mD', min: 0 },
-    { name: 'h', label: 'Thickness, h', unit: userUnits.length || 'ft', min: 1 },
-    { name: 'Bo', label: 'Formation Vol. Factor, B₀', unit: userUnits.oilFVF || 'bbl/STB', min: 0 },
-    { name: 'muo', label: 'Oil Viscosity, μ₂', unit: userUnits.viscosity || 'cp', min: 0 },
-    { name: 's', label: 'Skin Factor, s', unit: 'dimensionless', min: -7, max: 100 },
-    { name: 'rw', label: 'Well radius, rₒ', unit: userUnits.length || 'ft', min: 0 },
-  ];
-  
-  const gascommonFields = [
-    { name: 'k', label: 'Permeability, k', unit: userUnits.permeability || 'mD', min: 0 },
-    { name: 'h', label: 'Thickness, h', unit: userUnits.length || 'ft', min: 1 },
-    { name: 's', label: 'Skin Factor, s', unit: 'dimensionless', min: -7, max: 100 },
-    { name: 'rw', label: 'Well radius, rₒ', unit: userUnits.length || 'ft', min: 0 },
-    { name: 'sg_g', label: 'Gas Specific Gravity, Sg', unit: 'dimensionless', min: 0.56, max: 1},
-    { name: 'T_res', label: 'Reservoir Temperature, Tᵣ', unit: userUnits.temperature || '°F', min: 100, max: 350 },
-  ];
-  
-  const validateField = (fieldName: string, value: number): string => {
-    //
-    // 1) First, see if this field is in the oilcommonFields or gascommonFields arrays.
-    //
-    let field =
-      oilcommonFields.find((f) => f.name === fieldName) ||
-      gascommonFields.find((f) => f.name === fieldName);
-  
-    // If found in the arrays => apply min/max checks from the field object
-    if (field) {
-      if (field.min !== undefined && value < field.min) {
-        return `Must be at least ${field.min}`;
-      }
-      if (field.max !== undefined && value > field.max) {
-        return `Must be at most ${field.max}`;
-      }
-      // If it's in those arrays, we return here if valid
-      return "";
+  // Determine which fields to render based on iprPhase and flowRegime.
+  let fieldsToRender: FieldConfig[] = [];
+  if (iprPhase === 'Liquid') {
+    if (flowRegime === 'Transient') {
+      fieldsToRender = [...oilCommonFields, ...TransientFields];
+    } else if (flowRegime === 'Pseudosteady-State') {
+      fieldsToRender = [...oilCommonFields, ...PseudosteadyFields];
+    } else if (flowRegime === 'Steady-State') {
+      fieldsToRender = [...oilCommonFields, ...SteadystateFields];
     }
+  } else if (iprPhase === 'Gas') {
+    if (flowRegime === 'Transient') {
+      fieldsToRender = [...gasCommonFields, ...TransientFields];
+    } else if (flowRegime === 'Pseudosteady-State') {
+      fieldsToRender = [...gasCommonFields, ...PseudosteadyFields];
+    } else if (flowRegime === 'Steady-State') {
+      fieldsToRender = [...gasCommonFields, ...SteadystateFields];
+    }
+  } else if (iprPhase === 'Two-phase') {
+    fieldsToRender = [...oilCommonFields, ...TwoPhaseFields];
+  }
 
-    if (fieldName === "phi") {
-      // Porosity: 1 <= phi <= 50
-      if (value < 1) return "Must be >= 1%";
-      if (value > 50) return "Must be <= 50%";
-      return "";
-    }
-    if (fieldName === "ct") {
-      // Compressibility: 1e-7 <= ct <= 1e-3
-      if (value < 1e-7) return "Must be at least 1e-7";
-      if (value > 1e-3) return "Must be at most 1e-3";
-      return "";
-    }
-    if (fieldName === "t") {
-      // Time: 1e-3 <= t <= 10000
-      if (value < 1e-3) return "Must be >= 0.001 hrs";
-      if (value > 10000) return "Must be <= 10000 hrs";
-      return "";
-    }
-    if (fieldName === "pi") {
-      // initial reservoir pressure: 500 <= pi <= 20000
-      if (value < 500) return "Must be >= 500 psi";
-      if (value > 20000) return "Must be <= 20000 psi";
-      return "";
-    }
-  
-    // Liquid or Gas pseudosteady
-    if (fieldName === "pavg" || fieldName === "p_avg") {
-      // average reservoir pressure: 500 <= pavg <= 20000
-      if (value < 500) return "Must be >= 500 psi";
-      if (value > 20000) return "Must be <= 20000 psi";
-      return "";
-    }
-    if (fieldName === "pb") {
-      // saturation pressure: 300 <= pb <= 5000
-      if (value < 300) return "Must be >= 300 psi";
-      if (value > 5000) return "Must be <= 5000 psi";
-      return "";
-    }
-    if (fieldName === "a") {
-      // bowedness: 0.8 <= a <= 1
-      if (value < 0.8) return "Must be at least 0.8";
-      if (value > 1) return "Must be at most 1.0";
-      return "";
-    }
-  
-    // Liquid or Gas steady-state
-    if (fieldName === "pe") {
-      // boundary pressure: 500 <= pe <= 20000
-      if (value < 500) return "Must be >= 500 psi";
-      if (value > 20000) return "Must be <= 20000 psi";
-      return "";
-    }
-  
-    if (fieldName === "re") {
-      if (value < 0) return "Reservoir radius must be >= 0";
-      if (value > 20000) return "Must be <= 20000 ft";
-      return "";
-    }
-  
-    //
-    // 3) Spacing fields (for spacingMethod, spacingValue, etc.)
-    //
-    if (fieldName === "spacingValue") {
-      // By default, let's require spacingValue > 0
-      if (isNaN(value) || value <= 0) {
-        return "Spacing Value must be greater than 0";
+  // For certain dimensions, we skip unit text in the error message
+  const noConversionDimensions = ['porosity', 'skin', 'gasSG', 'bowedness'];
+
+  /** Validation function: convert baseMin/baseMax to user units (except for certain dims),
+   *  then check if the user's input is in range. Format with our `formatLimit()` function.
+   */
+  const validateField = (fieldName: string, value: number): string => {
+    const allFields: FieldConfig[] = [
+      ...oilCommonFields,
+      ...gasCommonFields,
+      ...TransientFields,
+      ...PseudosteadyFields,
+      ...SteadystateFields,
+      ...TwoPhaseFields,
+    ];
+    const field = allFields.find((f) => f.name === fieldName);
+    if (!field) return '';
+
+    const userUnit = userUnitsTyped[field.dimension] || field.unit;
+    // Convert only if dimension is not in noConversionDimensions
+    const isNoConv = noConversionDimensions.includes(field.dimension);
+
+    // Compute minLimit, maxLimit in user units (or base if dimensionless)
+    let minLimit: number | undefined = field.baseMin;
+    let maxLimit: number | undefined = field.baseMax;
+    if (!isNoConv) {
+      if (minLimit !== undefined) {
+        minLimit = UnitConverter.convert(field.dimension, minLimit, field.unit, userUnit);
       }
-      // Potentially an upper bound if you want, e.g. "Must be <= 9999"
-      return "";
+      if (maxLimit !== undefined) {
+        maxLimit = UnitConverter.convert(field.dimension, maxLimit, field.unit, userUnit);
+      }
     }
-  
-    return "";
+    // Check bounds
+    if (minLimit !== undefined && value < minLimit) {
+      const limitText = formatLimit(minLimit);
+      // Omit unit if isNoConv
+      const suffix = isNoConv ? '' : ` ${userUnit}`;
+      return `Must be at least ${limitText}${suffix}`;
+    }
+    if (maxLimit !== undefined && value > maxLimit) {
+      const limitText = formatLimit(maxLimit);
+      const suffix = isNoConv ? '' : ` ${userUnit}`;
+      return `Must be at most ${limitText}${suffix}`;
+    }
+    return '';
   };
-  
-  
-  
+
   return (
     <div style={{ border: '1px solid #ccc', padding: '1rem', borderRadius: '4px', maxWidth: '600px' }}>
       <h3>IPR Inputs (Units: {selectedUnitSystem || 'Unknown'})</h3>
@@ -252,7 +290,7 @@ const NodalAnalysisForm: React.FC<NodalAnalysisFormProps> = ({
         <label style={labelStyle}>IPR Phase:</label>
         <select name="iprPhase" value={iprPhase} onChange={handleTextChange} style={selectStyle}>
           <option value="">-- Select --</option>
-          {gas_oil_phaseOptions.map((p) => (
+          {gasOilPhaseOptions.map((p) => (
             <option key={p} value={p}>
               {p}
             </option>
@@ -260,544 +298,99 @@ const NodalAnalysisForm: React.FC<NodalAnalysisFormProps> = ({
         </select>
       </div>
 
-      {/* Flow Regime for Liquid/Two-phase */}
-      {(iprPhase === 'Liquid' || iprPhase === 'Two-phase') && (
+      {/* Flow Regime Selector */}
+      <div style={rowStyle}>
+        <label style={labelStyle}>Flow Regime:</label>
+        <select
+          name="flowRegime"
+          value={iprPhase === 'Two-phase' ? 'Pseudosteady-State' : flowRegime}
+          onChange={handleTextChange}
+          style={selectStyle}
+          disabled={iprPhase === 'Two-phase'}
+        >
+          {/* Show a blank option for flowRegime */}
+          <option value="">-- Select --</option>
+          {regimeOptions.map((r) => (
+            <option key={r} value={r}>
+              {r}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {/* For Gas calculations, display the z‑Method dropdown */}
+      {iprPhase === 'Gas' && (
         <div style={rowStyle}>
-          <label style={labelStyle}>Flow Regime:</label>
-          <select
-            name="flowRegime"
-            value={iprPhase === 'Two-phase' ? 'Pseudosteady-State' : flowRegime}
-            onChange={handleTextChange}
-            style={selectStyle}
-            disabled={iprPhase === 'Two-phase'}
-          >
-            {iprPhase === 'Liquid' ? (
-              <>
-                <option value="">-- Select --</option>
-                {regimeOptions.map((r) => (
-                  <option key={r} value={r}>
-                    {r}
-                  </option>
-                ))}
-              </>
-            ) : (
-              <option value="Pseudosteady-State">Pseudosteady-State</option>
-            )}
+          <label style={labelStyle}>z Factor Correlation:</label>
+          <select name="zMethod" value={zMethod} onChange={handleTextChange} style={selectStyle}>
+            <option value="">-- Select --</option>
+            {zmethodOptions.map((z) => (
+              <option key={z} value={z}>
+                {z}
+              </option>
+            ))}
           </select>
         </div>
       )}
 
-      {/* Gas-Specific Section */}
-      {iprPhase === 'Gas' && (
-        <>
-          {/* Gas Flow Regime Selector */}
-          <div style={rowStyle}>
-            <label style={labelStyle}>Flow Regime:</label>
-            <select
-              name="flowRegime"
-              value={flowRegime}
-              onChange={handleTextChange}
-              style={selectStyle}
-              disabled={!canEditFields}
-            >
-              <option value="">-- Select --</option>
-              {regimeOptions.map((r) => (
-                <option key={r} value={r}>
-                  {r}
-                </option>
-              ))}
-            </select>
-          </div>
+      {/* Render dynamic fields */}
+      {fieldsToRender.map((field) => {
+        const userUnit = userUnitsTyped[field.dimension] || field.unit;
+        // For the <input min=... max=...>, we do the same logic:
+        // But typically these just limit the HTML input. You can keep or remove them as you wish.
+        const isNoConv = noConversionDimensions.includes(field.dimension);
 
-          {/* z method selector */}
-          <div style={rowStyle}>
-            <label style={labelStyle}>z Factor Correlation:</label>
-            <select name="zMethod" value={zMethod} onChange={handleTextChange} style={selectStyle}>
-              <option value="">-- Select --</option>
-              {zmethodOptions.map((p) => (
-                <option key={p} value={p}>
-                  {p}
-                </option>
-              ))}
-            </select>
-          </div>
-        </>
-      )}
+        let minLimit = field.baseMin;
+        let maxLimit = field.baseMax;
+        if (!isNoConv) {
+          if (minLimit !== undefined) {
+            minLimit = UnitConverter.convert(field.dimension, minLimit, field.unit, userUnit);
+          }
+          if (maxLimit !== undefined) {
+            maxLimit = UnitConverter.convert(field.dimension, maxLimit, field.unit, userUnit);
+          }
+        }
 
+        // Show 0 properly with ?? '' 
+        const valueStr = formValues[field.name] ?? '';
 
-      {(iprPhase === 'Liquid' || iprPhase === 'Two-phase') && oilcommonFields.map((field) => (
-        <div style={rowStyle} key={field.name}>
-          <label style={labelStyle}>{field.label}:</label>
-          <input
-            type="number"
-            step="any"
-            name={field.name}
-            min={field.min}
-            max={field.max}
-            value={formValues[field.name] || ''}
-            onChange={handleNumericChange}
-            disabled={!canEditFields}
-            style={inputStyle}
-          />
-          <span style={unitStyle}>({field.unit})</span>
-          {errors[field.name] && (
-            <div style={{ color: 'red', fontSize: '0.8rem', marginLeft: '0.5rem' }}>
-              {errors[field.name]}
-            </div>
-          )}
-        </div>
-      ))}
-      {iprPhase === 'Gas' &&
-        gascommonFields.map((field) => (
+        return (
           <div style={rowStyle} key={field.name}>
             <label style={labelStyle}>{field.label}:</label>
             <input
               type="number"
               step="any"
               name={field.name}
-              min={field.min}
-              max={field.max}
-              value={formValues[field.name] || ''}
+              min={minLimit}
+              max={maxLimit}
+              value={valueStr}
               onChange={handleNumericChange}
               disabled={!canEditFields}
               style={inputStyle}
             />
-            <span style={unitStyle}>({field.unit})</span>
+            {/* Show unit label unless dimensionless/no conversion */}
+            {!isNoConv && <span style={unitStyle}>({userUnit})</span>}
+
             {errors[field.name] && (
               <div style={{ color: 'red', fontSize: '0.8rem', marginLeft: '0.5rem' }}>
                 {errors[field.name]}
               </div>
             )}
           </div>
-        ))}
+        );
+      })}
 
-      {/* Additional Fields for Liquid */}
-      {iprPhase === 'Liquid' && flowRegime === 'Transient' && (
-        <>
-          <div style={rowStyle}>
-            <label style={labelStyle}>Porosity, φ (%):</label>
-            <input
-              type="number"
-              step="any"
-              name="phi"
-              min={1}
-              max={50}
-              value={formValues.phi || ''}
-              onChange={handleNumericChange}
-              disabled={!canEditFields}
-              style={inputStyle}
-            />
-            <span style={unitStyle}>%</span>
-            {errors.phi && (
-            <div style={{ color: "red", fontSize: "0.8rem", marginLeft: "0.5rem" }}>
-              {errors.phi}
-            </div>
-          )}
-          </div>
-          <div style={rowStyle}>
-            <label style={labelStyle}>
-              Total Compressibility, c<span style={{ fontSize: 'smaller' }}>t</span>:
-            </label>
-            <input
-              type="number"
-              step="any"
-              name="ct"
-              min={1e-7}
-              max={1e-3}
-              value={formValues.ct || ''}
-              onChange={handleNumericChange}
-              disabled={!canEditFields}
-              style={inputStyle}
-            />
-            <span style={unitStyle}>({userUnits.compressibility || '1/psi'})</span>
-            {errors.ct && (
-            <div style={{ color: "red", fontSize: "0.8rem", marginLeft: "0.5rem" }}>
-              {errors.ct}
-            </div>
-          )}
-          </div>
-          <div style={rowStyle}>
-            <label style={labelStyle}>Time, t:</label>
-            <input
-              type="number"
-              step="any"
-              name="t"
-              min={1e-3}
-              max={10000}
-              value={formValues.t || ''}
-              onChange={handleNumericChange}
-              disabled={!canEditFields}
-              style={inputStyle}
-            />
-            <span style={unitStyle}>({userUnits.time || 'hrs'})</span>
-            {errors.t && (
-            <div style={{ color: "red", fontSize: "0.8rem", marginLeft: "0.5rem" }}>
-              {errors.t}
-            </div>
-          )}
-          </div>
-          <div style={rowStyle}>
-            <label style={labelStyle}>
-              Initial Reservoir Pressure, pi<sub>i</sub>:
-            </label>
-            <input
-              type="number"
-              step="any"
-              name="pi"
-              min={500}
-              max={20000}
-              value={formValues.pi || ''}
-              onChange={handleNumericChange}
-              disabled={!canEditFields}
-              style={inputStyle}
-            />
-            <span style={unitStyle}>({userUnits.pressure || 'psi'})</span>
-            {errors.pi && (
-            <div style={{ color: "red", fontSize: "0.8rem", marginLeft: "0.5rem" }}>
-              {errors.pi}
-            </div>
-          )}
-          </div>
-        </>
-      )}
-
-      {/* Additional Fields for Liquid (Pseudosteady-State / Two-phase) */}
-      {((iprPhase === 'Liquid' && flowRegime === 'Pseudosteady-State') || iprPhase === 'Two-phase') && (
-        <>
-          <div style={rowStyle}>
-            <label style={labelStyle}>
-              Avg Reservoir Pressure, p<sub>avg</sub>:
-            </label>
-            <input
-              type="number"
-              step="any"
-              name="pavg"
-              min={500}
-              max={20000}
-              value={formValues.pavg || ''}
-              onChange={handleNumericChange}
-              disabled={!canEditFields}
-              style={inputStyle}
-            />
-            <span style={unitStyle}>({userUnits.pressure || 'psi'})</span>
-            {errors.pavg && (
-            <div style={{ color: "red", fontSize: "0.8rem", marginLeft: "0.5rem" }}>
-              {errors.pavg}
-            </div>
-          )}
-          </div>
-          <div style={rowStyle}>
-            <label style={labelStyle}>
-              Reservoir radius, re<sub>e</sub>:
-            </label>
-            <input
-              type="number"
-              step="any"
-              name="re"
-              min={0}
-              max={20000}
-              value={formValues.re || ''}
-              onChange={handleNumericChange}
-              disabled={!canEditFields}
-              style={inputStyle}
-            />
-            <span style={unitStyle}>({userUnits.length || 'ft'})</span>
-            {errors.re && (
-            <div style={{ color: "red", fontSize: "0.8rem", marginLeft: "0.5rem" }}>
-              {errors.re}
-            </div>
-          )}
-          </div>
-          {iprPhase === 'Two-phase' && (
-            <>
-              <div style={rowStyle}>
-                <label style={labelStyle}>
-                  Saturation Pressure, p<sub>b</sub>:
-                </label>
-                <input
-                  type="number"
-                  step="any"
-                  name="pb"
-                  min={300}
-                  max={5000}
-                  value={formValues.pb || ''}
-                  onChange={handleNumericChange}
-                  disabled={!canEditFields}
-                  style={inputStyle}
-                />
-                <span style={unitStyle}>({userUnits.pressure || 'psi'})</span>
-                {errors.pb && (
-                <div style={{ color: "red", fontSize: "0.8rem", marginLeft: "0.5rem" }}>
-                  {errors.pb}
-                </div>
-              )}
-              </div>
-              <div style={rowStyle}>
-                <label style={labelStyle}>
-                  Bowedness, a:
-                </label>
-                <input
-                  type="number"
-                  step="any"
-                  name="a"
-                  min={0.8}
-                  max={1}
-                  value={formValues.a || ''}
-                  onChange={handleNumericChange}
-                  disabled={!canEditFields}
-                  style={inputStyle}
-                />
-                <span style={unitStyle}>({'dimensionless'})</span>
-                {errors.a && (
-                <div style={{ color: "red", fontSize: "0.8rem", marginLeft: "0.5rem" }}>
-                  {errors.a}
-                </div>
-              )}
-              </div>
-            </>
-          )}
-        </>
-      )}
-
-      {/* Additional Fields for Liquid (Steady-State) */}
-      {iprPhase === 'Liquid' && flowRegime === 'Steady-State' && (
-        <>
-          <div style={rowStyle}>
-            <label style={labelStyle}>
-              Boundary Pressure, pe<sub>e</sub>:
-            </label>
-            <input
-              type="number"
-              step="any"
-              name="pe"
-              min={500}
-              max={20000}
-              value={formValues.pe || ''}
-              onChange={handleNumericChange}
-              disabled={!canEditFields}
-              style={inputStyle}
-            />
-            <span style={unitStyle}>({userUnits.pressure || 'psi'})</span>
-            {errors.pe && (
-            <div style={{ color: "red", fontSize: "0.8rem", marginLeft: "0.5rem" }}>
-              {errors.pe}
-            </div>
-          )}
-          </div>
-          <div style={rowStyle}>
-            <label style={labelStyle}>
-              Reservoir radius, re<sub>e</sub>:
-            </label>
-            <input
-              type="number"
-              step="any"
-              name="re"
-              min={0}
-              max={20000}
-              value={formValues.re || ''}
-              onChange={handleNumericChange}
-              disabled={!canEditFields}
-              style={inputStyle}
-            />
-            <span style={unitStyle}>({userUnits.length || 'ft'})</span>
-            {errors.re && (
-            <div style={{ color: "red", fontSize: "0.8rem", marginLeft: "0.5rem" }}>
-              {errors.re}
-            </div>
-          )}
-          </div>
-        </>
-      )}
-
-      {/* Additional Fields for Gas */}
-      {iprPhase === 'Gas' && flowRegime === 'Transient' && (
-        <>
-          <div style={rowStyle}>
-            <label style={labelStyle}>Porosity, φ (%):</label>
-            <input
-              type="number"
-              step="any"
-              name="phi"
-              min={1}
-              max={50}
-              value={formValues.phi || ''}
-              onChange={handleNumericChange}
-              disabled={!canEditFields}
-              style={inputStyle}
-            />
-            <span style={unitStyle}>(%)</span>
-            {errors.phi && (
-            <div style={{ color: "red", fontSize: "0.8rem", marginLeft: "0.5rem" }}>
-              {errors.phi}
-            </div>
-          )}
-          </div>
-          <div style={rowStyle}>
-            <label style={labelStyle}>
-              Total Compressibility, c<span style={{ fontSize: 'smaller' }}>t</span>:
-            </label>
-            <input
-              type="number"
-              step="any"
-              name="ct"
-              min={1e-7}
-              max={1e-3}
-              value={formValues.ct || ''}
-              onChange={handleNumericChange}
-              disabled={!canEditFields}
-              style={inputStyle}
-            />
-            <span style={unitStyle}>({userUnits.compressibility || '1/psi'})</span>
-            {errors.ct && (
-            <div style={{ color: "red", fontSize: "0.8rem", marginLeft: "0.5rem" }}>
-              {errors.ct}
-            </div>
-          )}
-          </div>
-          <div style={rowStyle}>
-            <label style={labelStyle}>Time, t:</label>
-            <input
-              type="number"
-              step="any"
-              name="t"
-              min={1e-3}
-              max={10000}
-              value={formValues.t || ''}
-              onChange={handleNumericChange}
-              disabled={!canEditFields}
-              style={inputStyle}
-            />
-            <span style={unitStyle}>({userUnits.time || 'hrs'})</span>
-            {errors.t && (
-            <div style={{ color: "red", fontSize: "0.8rem", marginLeft: "0.5rem" }}>
-              {errors.t}
-            </div>
-          )}
-          </div>
-          <div style={rowStyle}>
-            <label style={labelStyle}>
-              Initial Reservoir Pressure, p<sub>i</sub>:
-            </label>
-            <input
-              type="number"
-              step="any"
-              name="pi"
-              min={500}
-              max={20000}
-              value={formValues.pi || ''}
-              onChange={handleNumericChange}
-              disabled={!canEditFields}
-              style={inputStyle}
-            />
-            <span style={unitStyle}>({userUnits.pressure || 'psi'})</span>
-            {errors.pi && (
-            <div style={{ color: "red", fontSize: "0.8rem", marginLeft: "0.5rem" }}>
-              {errors.pi}
-            </div>
-          )}
-          </div>
-        </>
-      )}
-      {iprPhase === 'Gas' && flowRegime === 'Pseudosteady-State' && (
-        <>
-          <div style={rowStyle}>
-            <label style={labelStyle}>Average Reservoir Pressure, p<sub>avg</sub>:</label>
-            <input
-              type="number"
-              step="any"
-              name="p_avg"
-              min={500}
-              max={20000}
-              value={formValues.p_avg || ''}
-              onChange={handleNumericChange}
-              disabled={!canEditFields}
-              style={inputStyle}
-            />
-            <span style={unitStyle}>({userUnits.pressure || 'psi'})</span>
-            {errors.p_avg && (
-            <div style={{ color: "red", fontSize: "0.8rem", marginLeft: "0.5rem" }}>
-              {errors.p_avg}
-            </div>
-          )}
-          </div>
-          <div style={rowStyle}>
-            <label style={labelStyle}>Reservoir Radius, re:</label>
-            <input
-              type="number"
-              step="any"
-              name="re"
-              min={0}
-              max={20000}
-              value={formValues.re || ''}
-              onChange={handleNumericChange}
-              disabled={!canEditFields}
-              style={inputStyle}
-            />
-            <span style={unitStyle}>({userUnits.length || 'ft'})</span>
-            {errors.re && (
-            <div style={{ color: "red", fontSize: "0.8rem", marginLeft: "0.5rem" }}>
-              {errors.re}
-            </div>
-          )}
-          </div>
-        </>
-      )}
-      {iprPhase === 'Gas' && flowRegime === 'Steady-State' && (
-        <>
-          <div style={rowStyle}>
-            <label style={labelStyle}>Boundary Pressure, pe:</label>
-            <input
-              type="number"
-              step="any"
-              name="pe"
-              min={500}
-              max={20000}
-              value={formValues.pe || ''}
-              onChange={handleNumericChange}
-              disabled={!canEditFields}
-              style={inputStyle}
-            />
-            <span style={unitStyle}>({userUnits.pressure || 'psi'})</span>
-            {errors.pe && (
-            <div style={{ color: "red", fontSize: "0.8rem", marginLeft: "0.5rem" }}>
-              {errors.pe}
-            </div>
-          )}
-          </div>
-          <div style={rowStyle}>
-            <label style={labelStyle}>Reservoir Radius, re:</label>
-            <input
-              type="number"
-              step="any"
-              name="re"
-              min={0}
-              max={20000}
-              value={formValues.re || ''}
-              onChange={handleNumericChange}
-              disabled={!canEditFields}
-              style={inputStyle}
-            />
-            <span style={unitStyle}>({userUnits.length || 'ft'})</span>
-            {errors.re && (
-            <div style={{ color: "red", fontSize: "0.8rem", marginLeft: "0.5rem" }}>
-              {errors.re}
-            </div>
-          )}
-          </div>
-        </>
-      )}
-
-      {/* Spacing Method & Value */}
+      {/* Spacing Method Dropdown */}
       <div style={rowStyle}>
         <label style={labelStyle}>Spacing Method:</label>
         <select
           name="spacingMethod"
-          value={formValues.spacingMethod || ''}
+          value={formValues.spacingMethod ?? ''}
           onChange={handleTextChange}
           disabled={!canEditFields}
-          style={inputStyle}
+          style={selectStyle}
         >
-          <option value="">(Default 25 pts)</option>
+          <option value="">-- Select --</option>
           {spacingMethods.map((m) => (
             <option key={m} value={m}>
               {m}
@@ -805,6 +398,8 @@ const NodalAnalysisForm: React.FC<NodalAnalysisFormProps> = ({
           ))}
         </select>
       </div>
+
+      {/* Spacing Value Input */}
       {formValues.spacingMethod && (
         <div style={rowStyle}>
           <label style={labelStyle}>Spacing Value:</label>
@@ -812,21 +407,29 @@ const NodalAnalysisForm: React.FC<NodalAnalysisFormProps> = ({
             type="number"
             step="any"
             name="spacingValue"
-            value={formValues.spacingValue || ''}
+            value={formValues.spacingValue ?? ''}
             onChange={handleNumericChange}
             disabled={!canEditFields}
             style={inputStyle}
           />
           <span style={unitStyle}>
             {formValues.spacingMethod === 'NumPoints'
-              ? '(e.g. 100 points)'
-              : formValues.spacingMethod === 'DeltaP'
-              ? '(psi increment)'
-              : '(flowrate increment)'}
+              ? 'points'
+              : formValues.spacingMethod === 'Delta Pressure'
+              ? userUnitsTyped['pressure'] || 'psi'
+              : formValues.spacingMethod === 'Delta Flowrate'
+              ? userUnitsTyped['flowrate'] || 'STB/day'
+              : ''}
           </span>
+          {errors['spacingValue'] && (
+            <div style={{ color: 'red', fontSize: '0.8rem', marginLeft: '0.5rem' }}>
+              {errors['spacingValue']}
+            </div>
+          )}
         </div>
       )}
 
+      {/* Calculate Button */}
       <button
         onClick={onCalculate}
         disabled={!iprPhase || (iprPhase === 'Liquid' && !flowRegime)}
@@ -839,4 +442,3 @@ const NodalAnalysisForm: React.FC<NodalAnalysisFormProps> = ({
 };
 
 export default NodalAnalysisForm;
-
