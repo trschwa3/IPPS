@@ -288,14 +288,15 @@ export function z_PT(
           return Z_DAK1975(P_pr, T_pr); // Dranchuk & Abou-Kassem - 1975 (Default)
         case 1:
           return Z_DPR1974(P_pr, T_pr); // Dranchuk, Purvis & Robinson - 1974
-        //case 2:
-          //return Z_HallYarborough1974(P_pr, T_pr); // Hall & Yarborough - 1974
+        case 2:
+          return Z_HallYarborough1974(P_pr, T_pr); // Hall & Yarborough - 1974
         case 3:
           return Z_RedlichKwong1949(P_pr, T_pr); // Redlich Kwong - 1949
         case 4:
           return Z_BrillBeggs1974(P_pr, T_pr); // Brill & Beggs - 1974
-        //case 5:
+        case 5:
           return Z_table(P_pr, T_pr); // Chart interpolation
+
         default:
           return NaN;
       }
@@ -414,53 +415,54 @@ export function z_PT(
     }
     return 999;
   }
-  /*
-  // Hall & Yarborough (1974) using Newton's method on an auxiliary variable Y.
-  export function Z_HallYarborough1974(Ppr: number, Tpr: number): number {
-    // Domain check
-    if (!((Ppr > 0 && Ppr < 30 && Tpr > 1 && Tpr <= 3) || (Ppr < 1 && Tpr > 0.7 && Tpr < 1))) {
+  
+  // Hall & Yarborough (1974) using Newton's method on auxiliary variable y.
+  function Z_HallYarborough1974(Ppr: number, Tpr: number): number {
+    // Recommended domain
+    if (!(Ppr > 0 && Ppr < 30 && Tpr > 1.0 && Tpr <= 3.0)) {
       throw new Error("Z_HallYarborough1974: out of recommended correlation limits");
     }
-    const A = 0.06125 * Ppr * Tpr * Math.exp(-1.2 * Math.pow(1 - Tpr, 2));
-    const b = Tpr * (14.76 - 9.76 * Tpr + 4.58 * Math.pow(Tpr, 2));
-    const c = Tpr * (90.7 - 242.2 * Tpr + 42.4 * Math.pow(Tpr, 2));
-    const d = 2.18 + 2.82 * Tpr;
-  
-    // Use Y as the iterative variable.
-    // Instead of starting with Y = A, choose the minimum of A and 0.5 as initial guess.
-    let Y = Math.min(A, 0.5);
-    let iteration = 0;
-    const maxIter = 100;
-    const tol = 1e-6;
-  
-    while (iteration < maxIter) {
-      // Instead of abruptly forcing Y to 0.6 when Y > 1,
-      // gently bring it back into a plausible range.
-      if (Y > 1) {
-        Y = 0.9;
+
+    // NOTE: A is divided by Tpr (not multiplied)
+    const A = 0.06125 * Ppr * Math.exp(-1.2 * Math.pow(1 - Tpr, 2)) / Tpr;
+    const B = Tpr * (14.76 - 9.76 * Tpr + 4.58 * Tpr * Tpr);
+    const C = Tpr * (90.7 - 242.2 * Tpr + 42.4 * Tpr * Tpr);
+    const D = 2.18 + 2.82 * Tpr;
+
+    // Initial guess; keep it in (0,1)
+    let y = Math.min(A, 0.5);
+    const tol = 1e-10;
+
+    for (let it = 0; it < 100; it++) {
+      const oneMy = 1 - y;
+      const num = y + y*y + y*y*y - y*y*y*y;
+      const den = oneMy * oneMy * oneMy;
+
+      // F(y)
+      const F = num/den - B*y*y + C*Math.pow(y, D) - A;
+
+      // F'(y)
+      const Np = 1 + 2*y + 3*y*y - 4*y*y*y;
+      const Dp = -3 * oneMy * oneMy;             // <-- correct sign
+      const Fp = (Np*den - num*Dp) / (den*den)
+              - 2*B*y
+              + C*D*Math.pow(y, D - 1);
+
+      if (!isFinite(Fp) || Math.abs(Fp) < 1e-14) break;
+
+      // Newton step with damping & clamping to (0,1)
+      let yNew = y - F/Fp;
+      yNew = Math.min(1 - 1e-8, Math.max(1e-10, yNew));
+
+      if (Math.abs(yNew - y) < tol) {
+        const z = A / yNew;                      // z = A / y
+        return z;
       }
-      const numerator = Y + Math.pow(Y, 2) + Math.pow(Y, 3) - Math.pow(Y, 4);
-      const denominator = Math.pow(1 - Y, 3);
-      const F = numerator / denominator - b * Y * Y + c * Math.pow(Y, d) - A;
-      
-      // Derivative calculation:
-      const N = Y + Math.pow(Y, 2) + Math.pow(Y, 3) - Math.pow(Y, 4);
-      const Nprime = 1 + 2 * Y + 3 * Math.pow(Y, 2) - 4 * Math.pow(Y, 3);
-      const D = Math.pow(1 - Y, 3);
-      const Dprime = 3 * Math.pow(1 - Y, 2);
-      const Fprime = (Nprime * D - N * Dprime) / (D * D) - 2 * b * Y + c * d * Math.pow(Y, d - 1);
-      
-      // Newton update
-      const Ynew = Y - F / Fprime;
-      if (Math.abs(Ynew - Y) < tol) {
-        return A / Ynew; // z = A / Ynew
-      }
-      Y = Ynew;
-      iteration++;
+      y = yNew;
     }
-    return 999; // Indicate failure to converge.
+    return 999; // signal non-convergence (caller should fall back)
   }
-  */
+
 
   // Redlich-Kwong (1949) using Newton's method on Z directly.
   export function Z_RedlichKwong1949(Ppr: number, Tpr: number): number {

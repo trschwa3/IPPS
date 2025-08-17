@@ -1,18 +1,23 @@
+// NodalAnalysis.tsx
 import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import './NodalAnalysis.css';
 import NodalAnalysisForm from './NodalAnalysisForm';
 import IPRChart from './IPRChart';
-import { calculateIPR } from './NodalAnalysisUtils';
+import { calculateIPR, calculateOPR_SinglePhaseOil } from './NodalAnalysisUtils'; // ⬅️ add OPR import
 import UnitConverter from '../../unit/UnitConverter';
 import { OilFVFWidget } from "../../Widgets/OilFVFWidget";
 import { OilViscosityWidget } from "../../Widgets/OilViscosityWidget";
-
-
 import unitSystemsData from '../../unit/unitSystems.json';
 
+type FrictionModel =
+  | 'Chen (1979)'
+  | 'Swamee-Jain'
+  | 'Colebrook-White'
+  | 'Laminar (auto)';
+
 interface UnitSystemDefinition {
-  [key: string]: string | undefined; // allow string indexing
+  [key: string]: string | undefined;
   pressure?: string;
   flowrate?: string;
   length?: string;
@@ -20,9 +25,9 @@ interface UnitSystemDefinition {
   viscosity?: string;
   compressibility?: string;
   density?: string;
-  oilFVF?: string; // If your JSON has a key for oil FVF
-  time?: string;   // If your JSON tracks time units
-  temperature?: string; // If your JSON tracks temperature units
+  oilFVF?: string;
+  time?: string;
+  temperature?: string;
 }
 
 const unitSystems = unitSystemsData as Record<string, UnitSystemDefinition>;
@@ -33,22 +38,25 @@ const NodalAnalysis: React.FC = () => {
   const { state } = useLocation() as { state: { unitSystem: string } | null };
   const selectedUnitSystem = state?.unitSystem || 'Oil Field';
 
+  // NEW: IPR/OPR mode + friction-factor model
+  const [inputMode, setInputMode] = useState<'IPR' | 'OPR'>('IPR');
+  const [frictionModel, setFrictionModel] = useState<FrictionModel>('Chen (1979)');
+
   const [iprPhase, setIprPhase] = useState('');
   const [zMethod, setzMethod] = useState('');
   const [flowRegime, setFlowRegime] = useState('');
   const [formValues, setFormValues] = useState<any>({});
+
   const [iprData, setIprData] = useState<Array<{ p_wf: number; q_o: number }>>([]);
+  const [oprData, setOprData] = useState<Array<{ p_wf: number; q_o: number }>>([]); // ⬅️ NEW
 
   function convertToOilfield(values: any) {
-    // Look up the user’s base units from the JSON
     const userUnits = unitSystems[selectedUnitSystem] || {};
-  
-    // Make a copy of the values
     const result = { ...values };
 
     const conversionMap = [
       { key: 'pi', type: 'pressure', standard: 'psi' },
-      { key: 'pavg', type: 'pressure', standard: 'psi' },
+      { key: 'p_avg', type: 'pressure', standard: 'psi' },
       { key: 'pe', type: 'pressure', standard: 'psi' },
       { key: 'h', type: 'length', standard: 'ft' },
       { key: 'rw', type: 'length', standard: 'ft' },
@@ -57,58 +65,83 @@ const NodalAnalysis: React.FC = () => {
       { key: 'muo', type: 'viscosity', standard: 'cp' },
       { key: 'ct', type: 'compressibility', standard: '1/psi' },
       { key: 'T_res', type: 'temperature', standard: '°F' },
-      // For oil FVF, check a specific key in userUnits (if available)
       { key: 'Bo', type: 'oil FVF', standard: 'bbl/STB', userKey: 'oilFVF' },
       { key: 't', type: 'time', standard: 'hrs' },
+      // OPR
+      { key: 'L', type: 'length', standard: 'ft' },
+      { key: 'eps', type: 'length', standard: 'ft' },
+      { key: 'p_wh', type: 'pressure', standard: 'psi' },
     ];
-  
+
     conversionMap.forEach(({ key, type, standard, userKey }) => {
       if (result[key] !== undefined) {
-        // Use the user's unit if available, otherwise use the standard unit.
-        const fromUnit = (userKey ? userUnits[userKey] : userUnits[type]) || standard;
+        const fromUnit = (userKey ? (userUnits as any)[userKey] : (userUnits as any)[type]) || standard;
         result[key] = UnitConverter.convert(type, result[key], fromUnit, standard);
       }
     });
-  
-    // Handle spacingValue based on spacingMethod.
-    if (result.spacingMethod === 'DeltaP' && result.spacingValue !== undefined) {
-      const fromUnit = userUnits.pressure || 'psi';
-      result.spacingValue = UnitConverter.convert('pressure', result.spacingValue, fromUnit, 'psi');
-    } else if (result.spacingMethod === 'DeltaQ' && result.spacingValue !== undefined) {
-      const fromUnit = userUnits.flowrate || 'STB/d';
-      result.spacingValue = UnitConverter.convert('flowrate', result.spacingValue, fromUnit, 'STB/d');
+
+    // Density: support lbm/gal → lbm/ft3 directly
+    if (result.rho !== undefined) {
+      const fromRhoUnit = (userUnits as any).density || 'lbm/ft3';
+      if (String(fromRhoUnit).toLowerCase().includes('lbm/gal')) {
+        result.rho = result.rho * 7.48051945; // gal→ft3
+      } else {
+        result.rho = UnitConverter.convert('density', result.rho, fromRhoUnit, 'lbm/ft3');
+      }
     }
-  
+
+    // Convert tubing ID → inches (store D_in)
+    if (result.D !== undefined) {
+      const fromLen = (userUnits as any).length || 'ft';
+      const D_ft = UnitConverter.convert('length', result.D, fromLen, 'ft');
+      result.D_in = D_ft * 12.0;
+    }
+
+    // Angle as number
+    if (result.thetaDeg !== undefined) result.thetaDeg = Number(result.thetaDeg);
+
+    // Spacing conversions (keep the labels you show in the UI)
+    if (result.spacingMethod === 'Delta Pressure' && result.spacingValue !== undefined) {
+      const fromUnit = (userUnits as any).pressure || 'psi';
+      result.spacingValue = UnitConverter.convert('pressure', result.spacingValue, fromUnit, 'psi');
+    } else if (result.spacingMethod === 'Delta Flowrate' && result.spacingValue !== undefined) {
+      const fromUnit = (userUnits as any).flowrate || 'STB/day';
+      result.spacingValue = UnitConverter.convert('flowrate', result.spacingValue, fromUnit, 'STB/day');
+    }
+
     return result;
   }
-  
+
 
   const handleCalculate = () => {
-    // Convert user inputs to Oil Field standard for everything.
     const oilfieldVals = convertToOilfield(formValues);
 
-    // Now compute the IPR points in standard units.
-    const newIprData = calculateIPR(
-      {
-        ...oilfieldVals,
-        spacingMethod: oilfieldVals.spacingMethod,
-        spacingValue: oilfieldVals.spacingValue,
-      },
-      iprPhase,
-      flowRegime,
-      zMethod
-    );
+    if (inputMode === 'IPR') {
+      const newIprData = calculateIPR({ ...oilfieldVals, spacingMethod: oilfieldVals.spacingMethod, spacingValue: oilfieldVals.spacingValue }, iprPhase, flowRegime, zMethod);
+      setIprData(newIprData);
+    } else {
+      // hint: max IPR q if it’s an oil IPR; otherwise undefined
+      const iprMaxQHint =
+        iprData && iprData.length && iprPhase !== 'Gas'
+          ? Math.max(...iprData.map(p => p.q_o))
+          : undefined;
 
-    // Save the result.
-    setIprData(newIprData);
+      const newOprData = calculateOPR_SinglePhaseOil({
+        ...oilfieldVals,
+        frictionModel,
+        qHint: iprMaxQHint, // ← optional
+      });
+      setOprData(newOprData);
+    }
   };
+
 
   return (
     <div className="nodal-analysis-container">
       <h1>Nodal Analysis</h1>
       <button onClick={() => navigate('/')}>Go Back</button>
 
-      {/* Dropdown to choose which widget to display */}
+      {/* Widget chooser (unchanged) */}
       <select
         value={activeWidget}
         onChange={(e) => setActiveWidget(e.target.value as "visc" | "fvf" | "none")}
@@ -119,7 +152,42 @@ const NodalAnalysis: React.FC = () => {
       </select>
 
       <div className="content-container">
+        {/* NEW: IPR/OPR toggle + friction-factor select (left of graph, above the form) */}
+        <div style={{ marginBottom: '0.75rem' }}>
+          <label style={{ marginRight: 12 }}><b>Inputs:</b></label>
+          <label style={{ marginRight: 8 }}>
+            <input
+              type="radio"
+              checked={inputMode === 'IPR'}
+              onChange={() => setInputMode('IPR')}
+            /> IPR
+          </label>
+          <label>
+            <input
+              type="radio"
+              checked={inputMode === 'OPR'}
+              onChange={() => setInputMode('OPR')}
+            /> OPR
+          </label>
+
+          {inputMode === 'OPR' && (
+            <span style={{ marginLeft: 16 }}>
+              <label style={{ marginRight: 8 }}><b>Friction factor:</b></label>
+              <select
+                value={frictionModel}
+                onChange={(e) => setFrictionModel(e.target.value as FrictionModel)}
+              >
+                <option>Chen (1979)</option>
+                <option>Swamee-Jain</option>
+                <option>Colebrook-White</option>
+                <option>Laminar (auto)</option>
+              </select>
+            </span>
+          )}
+        </div>
+
         <NodalAnalysisForm
+          inputMode={inputMode}              // ⬅️ NEW
           iprPhase={iprPhase}
           zMethod={zMethod}
           setIprPhase={setIprPhase}
@@ -131,20 +199,18 @@ const NodalAnalysis: React.FC = () => {
           onCalculate={handleCalculate}
           selectedUnitSystem={selectedUnitSystem}
         />
-        <IPRChart 
-        iprData={iprData} 
-        selectedUnitSystem={selectedUnitSystem} 
-        iprPhase={iprPhase} 
+
+        {/* Chart now can plot both series */}
+        <IPRChart
+          iprData={iprData}
+          oprData={oprData}                 // ⬅️ NEW
+          selectedUnitSystem={selectedUnitSystem}
+          iprPhase={iprPhase}
         />
 
-        {/* Conditionally render the selected widget */}
         <div style={{ marginTop: "2rem" }}>
-          {activeWidget === "visc" && (
-            <OilViscosityWidget selectedUnitSystem={selectedUnitSystem} />
-          )}
-          {activeWidget === "fvf" && (
-            <OilFVFWidget selectedUnitSystem={selectedUnitSystem} />
-          )}
+          {activeWidget === "visc" && <OilViscosityWidget selectedUnitSystem={selectedUnitSystem} />}
+          {activeWidget === "fvf" && <OilFVFWidget selectedUnitSystem={selectedUnitSystem} />}
         </div>
       </div>
     </div>

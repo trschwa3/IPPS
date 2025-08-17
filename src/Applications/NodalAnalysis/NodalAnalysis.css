@@ -84,3 +84,14 @@
     font-style: italic;
     font-size: 0.85rem;
   }
+
+  .top-controls {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    background: #fafafa;
+    margin: 0.5rem 0 0.75rem;
+  }

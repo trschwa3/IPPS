@@ -43,7 +43,7 @@ export const TransientFields: FieldConfig[] = [
 
 // Pseudosteady fields (for both oil and gas)
 export const PseudosteadyFields: FieldConfig[] = [
-  { name: 'pavg', label: 'Average Reservoir Pressure, pavg', dimension: 'pressure', baseMin: 500, baseMax: 20000, unit: 'psi' },
+  { name: 'p_avg', label: 'Average Reservoir Pressure, p_avg', dimension: 'pressure', baseMin: 500, baseMax: 20000, unit: 'psi' },
   { name: 're',   label: 'Reservoir Radius, rᵣ',            dimension: 'length',   baseMin: 0.1, unit: 'ft'      },
 ];
 
@@ -55,25 +55,25 @@ export const SteadystateFields: FieldConfig[] = [
 
 // Two-phase fields (for two-phase calculations)
 export const TwoPhaseFields: FieldConfig[] = [
-  { name: 'pavg', label: 'Average Reservoir Pressure, pavg', dimension: 'pressure', baseMin: 500,  baseMax: 20000, unit: 'psi' },
+  { name: 'p_avg', label: 'Average Reservoir Pressure, p_avg', dimension: 'pressure', baseMin: 500,  baseMax: 20000, unit: 'psi' },
   { name: 'pb',   label: 'Saturation Pressure, pb',           dimension: 'pressure', baseMin: 300,  baseMax: 5000,  unit: 'psi' },
   { name: 'a',    label: 'Bowedness, a',                      dimension: 'bowedness', baseMin: 0.8, baseMax: 1,     unit: 'dimensionless' },
   { name: 're',   label: 'Reservoir Radius, rᵣ',              dimension: 'length',    baseMin: 0.1, unit: 'ft'      },
 ];
 
-// --- Component Props & Main Component ---
-
+// NodalAnalysisForm.tsx (props)
 interface NodalAnalysisFormProps {
+  inputMode: 'IPR' | 'OPR';                 // ⬅️ NEW
   iprPhase: string;
-  zMethod: string;
   setIprPhase: (phase: string) => void;
-  setzMethod: (phase: string) => void;
   flowRegime: string;
   setFlowRegime: (regime: string) => void;
   formValues: any;
   setFormValues: (vals: any) => void;
   onCalculate: () => void;
   selectedUnitSystem: string;
+  zMethod?: string;
+  setzMethod?: (m: string) => void;
 }
 
 /** A helper that formats numeric limits with “smart” rules:
@@ -100,10 +100,11 @@ function formatLimit(value: number): string {
 }
 
 const NodalAnalysisForm: React.FC<NodalAnalysisFormProps> = ({
+  inputMode,
   iprPhase,
   zMethod,
   setIprPhase,
-  setzMethod,
+  setzMethod = () => {},   // ← default no-op fixes runtime + TS
   flowRegime,
   setFlowRegime,
   formValues,
@@ -111,6 +112,7 @@ const NodalAnalysisForm: React.FC<NodalAnalysisFormProps> = ({
   onCalculate,
   selectedUnitSystem,
 }) => {
+
   const [errors, setErrors] = React.useState<{ [key: string]: string }>({});
 
   // Force pseudosteady-state for Two-phase
@@ -131,25 +133,37 @@ const NodalAnalysisForm: React.FC<NodalAnalysisFormProps> = ({
   const zmethodOptions = [
     'Dranchuk & Abou-Kassem - 1975',
     'Dranchuk, Purvis & Robinson - 1974',
+    'Hall & Yarborough - 1974',
     'Redlich Kwong - 1949',
     'Brill & Beggs - 1974',
+    'Chart Interpolation',
   ];
 
   // Spacing methods
   let spacingMethods = ['Number of Points', 'Delta Pressure', 'Delta Flowrate'];
-  if (iprPhase === 'Gas' || iprPhase === 'Two-phase') {
-    spacingMethods = ['Number of Points', 'Delta Pressure', 'Delta Flowrate'];
+
+  if (inputMode === 'OPR') {
+    spacingMethods = ['Number of Points', 'Delta Flowrate'];
+  } else {
+    if (iprPhase === 'Gas') {
+      spacingMethods = ['Number of Points', 'Delta Pressure'];
+    } else if (iprPhase === 'Two-phase') {
+      spacingMethods = ['Number of Points', 'Delta Pressure', 'Delta Flowrate'];
+    } else {
+      spacingMethods = ['Number of Points', 'Delta Pressure', 'Delta Flowrate'];
+    }
   }
-  if (iprPhase === 'Gas') {
-    spacingMethods = ['Number of Points', 'Delta Pressure'];
-  }
+
 
   // Get the user's unit definitions as a Record<string, string>
   const userUnitsTyped = (unitSystems[selectedUnitSystem as keyof typeof unitSystems] ||
     {}) as Record<string, string>;
 
   // Enable editing only if iprPhase is selected and, for liquids, flowRegime is selected.
-  const canEditFields = iprPhase !== '' && (iprPhase !== 'Liquid' || flowRegime !== '');
+  const canEditFields =
+    inputMode === 'OPR'
+      ? true
+      : iprPhase !== '' && (iprPhase !== 'Liquid' || flowRegime !== '');
 
   /** Handler for numeric inputs */
   const handleNumericChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -166,7 +180,7 @@ const NodalAnalysisForm: React.FC<NodalAnalysisFormProps> = ({
     }
     // Example: special logic for pb if needed
     if (name === 'pb' && isNaN(parsed)) {
-      parsed = formValues.pavg || 3000;
+      parsed = formValues.p_avg || 3000;
     }
     const errorMsg = validateField(name, parsed);
     setErrors((prev) => ({ ...prev, [name]: errorMsg }));
@@ -283,61 +297,62 @@ const NodalAnalysisForm: React.FC<NodalAnalysisFormProps> = ({
 
   return (
     <div style={{ border: '1px solid #ccc', padding: '1rem', borderRadius: '4px', maxWidth: '600px' }}>
-      <h3>IPR Inputs (Units: {selectedUnitSystem || 'Unknown'})</h3>
+      <h3>{inputMode} Inputs (Units: {selectedUnitSystem || 'Unknown'})</h3>
 
-      {/* IPR Phase Selector */}
-      <div style={rowStyle}>
-        <label style={labelStyle}>IPR Phase:</label>
-        <select name="iprPhase" value={iprPhase} onChange={handleTextChange} style={selectStyle}>
-          <option value="">-- Select --</option>
-          {gasOilPhaseOptions.map((p) => (
-            <option key={p} value={p}>
-              {p}
-            </option>
-          ))}
-        </select>
-      </div>
+      {inputMode === 'IPR' && (
+        <>
+          {/* IPR Phase Selector */}
+          <div style={rowStyle}>
+            <label style={labelStyle}>IPR Phase:</label>
+            <select name="iprPhase" value={iprPhase} onChange={handleTextChange} style={selectStyle}>
+              <option value="">-- Select --</option>
+              {gasOilPhaseOptions.map((p) => (
+                <option key={p} value={p}>
+                  {p}
+                </option>
+              ))}
+            </select>
+          </div>
 
-      {/* Flow Regime Selector */}
-      <div style={rowStyle}>
-        <label style={labelStyle}>Flow Regime:</label>
-        <select
-          name="flowRegime"
-          value={iprPhase === 'Two-phase' ? 'Pseudosteady-State' : flowRegime}
-          onChange={handleTextChange}
-          style={selectStyle}
-          disabled={iprPhase === 'Two-phase'}
-        >
-          {/* Show a blank option for flowRegime */}
-          <option value="">-- Select --</option>
-          {regimeOptions.map((r) => (
-            <option key={r} value={r}>
-              {r}
-            </option>
-          ))}
-        </select>
-      </div>
+          {/* Flow Regime Selector */}
+          <div style={rowStyle}>
+            <label style={labelStyle}>Flow Regime:</label>
+            <select
+              name="flowRegime"
+              value={iprPhase === 'Two-phase' ? 'Pseudosteady-State' : flowRegime}
+              onChange={handleTextChange}
+              style={selectStyle}
+              disabled={iprPhase === 'Two-phase'}
+            >
+              <option value="">-- Select --</option>
+              {regimeOptions.map((r) => (
+                <option key={r} value={r}>
+                  {r}
+                </option>
+              ))}
+            </select>
+          </div>
 
-      {/* For Gas calculations, display the z‑Method dropdown */}
-      {iprPhase === 'Gas' && (
-        <div style={rowStyle}>
-          <label style={labelStyle}>z Factor Correlation:</label>
-          <select name="zMethod" value={zMethod} onChange={handleTextChange} style={selectStyle}>
-            <option value="">-- Select --</option>
-            {zmethodOptions.map((z) => (
-              <option key={z} value={z}>
-                {z}
-              </option>
-            ))}
-          </select>
-        </div>
+          {/* z-Method for Gas */}
+          {iprPhase === 'Gas' && (
+            <div style={rowStyle}>
+              <label style={labelStyle}>z Factor Correlation:</label>
+              <select name="zMethod" value={zMethod} onChange={handleTextChange} style={selectStyle}>
+                <option value="">-- Select --</option>
+                {zmethodOptions.map((z) => (
+                  <option key={z} value={z}>
+                    {z}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+        </>
       )}
 
       {/* Render dynamic fields */}
-      {fieldsToRender.map((field) => {
+      {inputMode === 'IPR' && fieldsToRender.map((field) => {
         const userUnit = userUnitsTyped[field.dimension] || field.unit;
-        // For the <input min=... max=...>, we do the same logic:
-        // But typically these just limit the HTML input. You can keep or remove them as you wish.
         const isNoConv = noConversionDimensions.includes(field.dimension);
 
         let minLimit = field.baseMin;
@@ -351,7 +366,6 @@ const NodalAnalysisForm: React.FC<NodalAnalysisFormProps> = ({
           }
         }
 
-        // Show 0 properly with ?? '' 
         const valueStr = formValues[field.name] ?? '';
 
         return (
@@ -368,7 +382,6 @@ const NodalAnalysisForm: React.FC<NodalAnalysisFormProps> = ({
               disabled={!canEditFields}
               style={inputStyle}
             />
-            {/* Show unit label unless dimensionless/no conversion */}
             {!isNoConv && <span style={unitStyle}>({userUnit})</span>}
 
             {errors[field.name] && (
@@ -379,6 +392,117 @@ const NodalAnalysisForm: React.FC<NodalAnalysisFormProps> = ({
           </div>
         );
       })}
+
+      {inputMode === 'OPR' && (
+        <fieldset style={{ marginTop: 12 }}>
+          <legend>OPR — Single-phase Oil</legend>
+
+          <div style={rowStyle}>
+            <label style={labelStyle}>Wellhead Pressure pₕ (psi):</label>
+            <input
+              type="number"
+              step="any"
+              name="p_wh"
+              value={formValues.p_wh ?? ''}
+              onChange={handleNumericChange}
+              style={inputStyle}
+            />
+            <span style={unitStyle}>({userUnitsTyped['pressure'] || 'psi'})</span>
+          </div>
+
+          <div style={rowStyle}>
+            <label style={labelStyle}>Tubing I.D., D (length units):</label>
+            <input
+              type="number"
+              step="any"
+              name="D"
+              value={formValues.D ?? ''}
+              onChange={handleNumericChange}
+              style={inputStyle}
+            />
+            <span style={unitStyle}>({userUnitsTyped['length'] || 'ft'})</span>
+          </div>
+
+          <div style={rowStyle}>
+            <label style={labelStyle}>Roughness ε (length units):</label>
+            <input
+              type="number"
+              step="any"
+              name="eps"
+              value={formValues.eps ?? ''}
+              onChange={handleNumericChange}
+              style={inputStyle}
+            />
+            <span style={unitStyle}>({userUnitsTyped['length'] || 'ft'})</span>
+          </div>
+
+          <div style={rowStyle}>
+            <label style={labelStyle}>Measured Length, L:</label>
+            <input
+              type="number"
+              step="any"
+              name="L"
+              value={formValues.L ?? ''}
+              onChange={handleNumericChange}
+              style={inputStyle}
+            />
+            <span style={unitStyle}>({userUnitsTyped['length'] || 'ft'})</span>
+          </div>
+
+          <div style={rowStyle}>
+            <label style={labelStyle}>Inclination θ (deg from horizontal):</label>
+            <input
+              type="number"
+              step="any"
+              name="thetaDeg"
+              value={formValues.thetaDeg ?? 90}
+              onChange={handleNumericChange}
+              style={inputStyle}
+            />
+            <span style={unitStyle}>(deg)</span>
+          </div>
+
+          <div style={rowStyle}>
+            <label style={labelStyle}>Density ρ:</label>
+            <input
+              type="number"
+              step="any"
+              name="rho"
+              value={formValues.rho ?? ''}
+              onChange={handleNumericChange}
+              style={inputStyle}
+            />
+            <span style={unitStyle}>({userUnitsTyped['density'] || 'lbm/ft3'})</span>
+          </div>
+
+          <div style={rowStyle}>
+            <label style={labelStyle}>Oil Viscosity μ₀:</label>
+            <input
+              type="number"
+              step="any"
+              name="muo"
+              value={formValues.muo ?? ''}
+              onChange={handleNumericChange}
+              style={inputStyle}
+            />
+            <span style={unitStyle}>({userUnitsTyped['viscosity'] || 'cp'})</span>
+          </div>
+
+          <div style={rowStyle}>
+            <label style={labelStyle}>qₘₐₓ (extent):</label>
+            <input
+              type="number"
+              step="any"
+              name="q_max"
+              value={formValues.q_max ?? 1000}
+              onChange={handleNumericChange}
+              style={inputStyle}
+            />
+            <span style={unitStyle}>({userUnitsTyped['flowrate'] || 'STB/day'})</span>
+          </div>
+        </fieldset>
+      )}
+
 
       {/* Spacing Method Dropdown */}
       <div style={rowStyle}>
@@ -432,7 +556,7 @@ const NodalAnalysisForm: React.FC<NodalAnalysisFormProps> = ({
       {/* Calculate Button */}
       <button
         onClick={onCalculate}
-        disabled={!iprPhase || (iprPhase === 'Liquid' && !flowRegime)}
+        disabled={inputMode === 'IPR' && (!iprPhase || (iprPhase === 'Liquid' && !flowRegime))}
         style={{ marginTop: '1rem' }}
       >
         Calculate
@@ -442,3 +566,4 @@ const NodalAnalysisForm: React.FC<NodalAnalysisFormProps> = ({
 };
 
 export default NodalAnalysisForm;
+

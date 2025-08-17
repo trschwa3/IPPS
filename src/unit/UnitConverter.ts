@@ -29,12 +29,15 @@ class UnitConverter {
     // Flowrate (base: m³/day)
     static flowrateFactors: Record<string, number> = {
       'm³/day': 1,
+      'Mm³/day': 1000,
       'bbl/hr': 0.1589878 * 24,
       'STB/day': 0.158987,    // 1 STB = 1 bbl
-      'STB/d': 0.158987,    // 1 STB = 1 bbl
       'MCF/day': 28.3168466,  // 1000 ft³ = 28.3168466 m³
+      'MMCF/day': 28316.8466, // 1 MCF = 1000 ft³
       'm³/s': 86400,          // 1 m³/s = 86400 m³/day
       'L/s': 86.4,            // 1 L/s = 86.4 m³/day
+      'gal/min': 0.00378541 * 60 * 24, // 1 gal/min = 0.00378541 m³/day
+      'ft³/min': 0.0283168466 * 60 * 24, // 1 ft³/min = 0.0283168466 m³/day
     };
   
     // Volume (base: m³)

@@ -1,11 +1,19 @@
 import { gas_visc_PT, z_PT } from "../../Correlations/GasCorrelations"
 
+export type FrictionModel =
+  | 'Chen (1979)'
+  | 'Swamee-Jain'
+  | 'Colebrook-White'
+  | 'Laminar (auto)';
+
 export function calculateIPR(params: any, iprPhase: string, flowRegime: string, zMethod: string) {
     const correlationMap: Record<string, number> = {
       'Dranchuk & Abou-Kassem - 1975': 0,
       'Dranchuk, Purvis & Robinson - 1974': 1,
+      'Hall & Yarborough - 1974': 2,
       'Redlich Kwong - 1949': 3,
       'Brill & Beggs - 1974': 4,
+      'Chart Interpolation': 5,
     };
     const zMethodCode = correlationMap[zMethod] ?? 0;
     params.zMethodCode = zMethodCode;
@@ -121,14 +129,14 @@ export function calculateIPR(params: any, iprPhase: string, flowRegime: string, 
     Bo,
     muo,
     s,
-    pavg,
+    p_avg,
     re,
     rw,
     spacingMethod,
     spacingValue,
   }: any) {
     /*
-      q_o = [ (k*h)/(141.2 * Bo * muo) ] * [1 / ( ln(re/rw) -0.75 + s ) ] * (pavg - p_wf)
+      q_o = [ (k*h)/(141.2 * Bo * muo) ] * [1 / ( ln(re/rw) -0.75 + s ) ] * (p_avg - p_wf)
     */
     const points = [];
     const method = spacingMethod || '';
@@ -142,25 +150,25 @@ export function calculateIPR(params: any, iprPhase: string, flowRegime: string, 
       const N = val > 0 ? val : defaultN;
       for (let i = 0; i < N; i++) {
         const frac = i / (N - 1);
-        const p_wf = pavg * (1 - frac);
-        const q_o = factor * (pavg - p_wf);
+        const p_wf = p_avg * (1 - frac);
+        const q_o = factor * (p_avg - p_wf);
         points.push({ p_wf, q_o });
       }
     } else if (method === "Delta Pressure") {
       const deltaP = val > 0 ? val : 100;
-      let p_wf = pavg;
+      let p_wf = p_avg;
       while (p_wf > 0) {
-        const q_o = factor * (pavg - p_wf);
+        const q_o = factor * (p_avg - p_wf);
         points.push({ p_wf, q_o });
         p_wf -= deltaP;
       }
     } else if (method === 'Delta Flowrate') {
-      // invert: q = factor*(pavg - p_wf) => p_wf = pavg - q/factor
+      // invert: q = factor*(p_avg - p_wf) => p_wf = p_avg - q/factor
       const dq = val > 0 ? val : 50;
       // approximate max flow if p_wf=0
-      const qMax = factor * pavg;
+      const qMax = factor * p_avg;
       for (let q = 0; q <= qMax; q += dq) {
-        const p_wf = pavg - q / factor;
+        const p_wf = p_avg - q / factor;
         if (p_wf < 0) break;
         points.push({ p_wf, q_o: q });
       }
@@ -169,8 +177,8 @@ export function calculateIPR(params: any, iprPhase: string, flowRegime: string, 
       const N = defaultN;
       for (let i = 0; i < N; i++) {
         const frac = i / (N - 1);
-        const p_wf = pavg * (1 - frac);
-        const q_o = factor * (pavg - p_wf);
+        const p_wf = p_avg * (1 - frac);
+        const q_o = factor * (p_avg - p_wf);
         points.push({ p_wf, q_o });
       }
     }
@@ -247,7 +255,7 @@ export function calculateIPR(params: any, iprPhase: string, flowRegime: string, 
     Bo,
     muo,
     s,
-    pavg,
+    p_avg,
     pb,   // Bubble point / saturation pressure (assumed already in psi)
     re,
     rw,
@@ -265,29 +273,29 @@ export function calculateIPR(params: any, iprPhase: string, flowRegime: string, 
     const denom = Math.log(re / rw) - 0.75 + s;
     const J = (k * h) / (141.2 * Bo * muo) / denom;
   
-    // For pavg > pb, define q_bubble and q_vmax.
-    const q_bubble = J * (pavg - pb);
+    // For p_avg > pb, define q_bubble and q_vmax.
+    const q_bubble = J * (p_avg - pb);
     const q_vmax = q_bubble / 1.8;
   
     // Piecewise function (same for both NumPoints and DeltaQ)
     function getFlow(p_wf: number): number {
-      if (pavg <= pb) {
+      if (p_avg <= pb) {
         // Entire reservoir below bubble point:
-        return (J * pavg / (1+a)) * (1 - (1-a) * (p_wf / pavg) - a * Math.pow(p_wf / pavg, 2));
+        return (J * p_avg / (1+a)) * (1 - (1-a) * (p_wf / p_avg) - a * Math.pow(p_wf / p_avg, 2));
       } else {
-        // pavg > pb:
+        // p_avg > pb:
         if (p_wf >= pb) {
-          return J * (pavg - p_wf);
+          return J * (p_avg - p_wf);
         } else {
-          return J * (pavg - pb) + (J * pb / (1+a)) * (1 - (1-a) * (p_wf / pb) - a * Math.pow(p_wf / pb, 2));
+          return J * (p_avg - pb) + (J * pb / (1+a)) * (1 - (1-a) * (p_wf / pb) - a * Math.pow(p_wf / pb, 2));
         }
       }
     }
   
     // DeltaQ inversion function
     function invertFlow(q: number): number | null {
-      if (pavg <= pb) {
-        const A_sat = J * pavg / (1+a);
+      if (p_avg <= pb) {
+        const A_sat = J * p_avg / (1+a);
         const A_coef = a;
         const B_coef = 1-a;
         const C_coef = (q / A_sat) - 1;
@@ -299,15 +307,15 @@ export function calculateIPR(params: any, iprPhase: string, flowRegime: string, 
         const candidates = [x1, x2].filter(x => x >= 0 && x <= 1);
         if (candidates.length === 0) return null;
         const x = Math.max(...candidates);
-        return x * pavg;
+        return x * p_avg;
       } else {
-        // pavg > pb: first check if the flow falls in the single-phase (Darcy) region.
-        const p_wf_single = pavg - q / J;
+        // p_avg > pb: first check if the flow falls in the single-phase (Darcy) region.
+        const p_wf_single = p_avg - q / J;
         if (p_wf_single >= pb) {
           return p_wf_single;
         }
         //two phaseregion
-        const Q_offset = J * (pavg - pb);
+        const Q_offset = J * (p_avg - pb);
         const A_vog = J * pb / (1+a);
 
         const A_coef = a;
@@ -329,12 +337,12 @@ export function calculateIPR(params: any, iprPhase: string, flowRegime: string, 
     if (method === 'Delta Flowrate') {
       const dq = val > 0 ? val : 50;
       let qMax: number;
-      if (pavg <= pb) {
+      if (p_avg <= pb) {
         // Saturated case: maximum flow occurs at p_wf = 0.
-        qMax = (J * pavg) / (1+a); 
+        qMax = (J * p_avg) / (1+a); 
       } else {
-        // For pavg > pb, maximum flow in single-phase is J*pavg, while in Vogel region it's q_bubble + q_vmax.
-        const q_singleMax = J * pavg;
+        // For p_avg > pb, maximum flow in single-phase is J*p_avg, while in Vogel region it's q_bubble + q_vmax.
+        const q_singleMax = J * p_avg;
         const q_vogelMax = q_bubble + q_vmax;
         qMax = Math.max(q_singleMax, q_vogelMax);
       }
@@ -352,15 +360,15 @@ export function calculateIPR(params: any, iprPhase: string, flowRegime: string, 
       const N = val > 0 ? val : defaultN;
       for (let i = 0; i < N; i++) {
         const frac = i / (N - 1);
-        // For two-phase, span p_wf from pavg down to 0.
-        const p_wf = pavg * (1 - frac);
+        // For two-phase, span p_wf from p_avg down to 0.
+        const p_wf = p_avg * (1 - frac);
         const q_o = getFlow(p_wf);
         points.push({ p_wf, q_o });
       }
       return points;
     } else if (method === "Delta Pressure") {
       const deltaP = val > 0 ? val : 100;
-      let p_wf = pavg;
+      let p_wf = p_avg;
       while (p_wf >= 0) {
         points.push({ p_wf, q_o: getFlow(p_wf) });
         p_wf -= deltaP;
@@ -374,62 +382,60 @@ export function calculateIPR(params: any, iprPhase: string, flowRegime: string, 
 
     // New gas IPR function for pseudosteady-state gas flow.
     function gas_calculatePseudosteadyIPR({
-      k,
-      h,
-      rw,
-      re,
-      s,
-      // Gas reservoir properties:
-      T_res,    // Reservoir temperature (°F)
-      sg_g,     // Gas specific gravity (dimensionless)
-      p_avg,    // Average reservoir pressure (psia)
-      // Spacing options:
-      spacingMethod,
-      spacingValue,
-      // New parameter from the form:
+      k, h, rw, re, s,
+      T_res, sg_g,
+      p_avg, pavg,                  // accept both just in case
+      spacingMethod, spacingValue,
       zMethodCode,
     }: any): { p_wf: number; q_o: number }[] {
-      console.log(zMethodCode);
-      const J = (k * h) / (1424 * (T_res + 459.67) * (Math.log(re/rw) - 0.75 + s)); // T in rankine
+      // fallback alias + numeric coercion
+      if (!Number.isFinite(p_avg)) p_avg = Number(pavg);
+
+      // hard guards
+      if (!Number.isFinite(p_avg) || p_avg <= 0) return [];
+      if (!Number.isFinite(k) || k <= 0) return [];
+      if (!Number.isFinite(h) || h <= 0) return [];
+      if (!Number.isFinite(rw) || rw <= 0) return [];
+      if (!Number.isFinite(re) || re <= rw) return [];
+      if (!Number.isFinite(T_res)) return [];
+      if (!Number.isFinite(sg_g)) return [];
+
+      const denom = Math.log(re / rw) - 0.75 + s;
+      if (!Number.isFinite(denom) || denom <= 0) return [];
+
+      const J = (k * h) / (1424 * (T_res + 459.67) * denom);
 
       const points: { p_wf: number; q_o: number }[] = [];
       const methodUsed = spacingMethod || '';
       const val = spacingValue || 0;
-      const defaultN = 25;
+      const N = val > 0 ? val : 25;
 
-      function getGasFlow(p_wf: number): number {
-        const mu_avg = gas_visc_PT((p_wf+p_avg)/2, T_res, sg_g); //T in f
-        const z_avg = z_PT((p_wf+p_avg)/2, T_res, sg_g, zMethodCode);   
-        console.log ("mu avg", mu_avg, "z_avg", z_avg, "@ pwf", p_wf);
-        const delta_m = (Math.pow(p_avg,2) - Math.pow(p_wf,2))/(mu_avg * z_avg);
-        return J * delta_m;
-        } 
-      
-      
-      // 5. Implement the spacing methods. (Here we show the "NumPoints" approach.)
+      const getGasFlow = (p_wf: number) => {
+        const Pmid = (p_wf + p_avg) / 2;
+        const mu = gas_visc_PT(Pmid, T_res, sg_g);
+        const z  = z_PT(Pmid, T_res, sg_g, zMethodCode);
+        if (!Number.isFinite(mu) || mu <= 0) return NaN;
+        if (!Number.isFinite(z)  || z  <= 0) return NaN;
+        return J * ((p_avg * p_avg - p_wf * p_wf) / (mu * z));
+      };
+
       if (methodUsed === 'Number of Points' || methodUsed === '') {
-        const N = val > 0 ? val : defaultN;
         for (let i = 0; i < N; i++) {
-          // Here, we linearly span p_wf from p_avg down to 0.
           const frac = i / (N - 1);
           const p_wf = p_avg * (1 - frac);
-          const q_o = getGasFlow(p_wf);
-          points.push({ p_wf, q_o });
+          const q = getGasFlow(p_wf);
+          if (Number.isFinite(q)) points.push({ p_wf, q_o: q });
         }
-        return points;
-      } else if (methodUsed === "Delta Pressure") {
-        const deltaP = val > 0 ? val : 100;
-        let p_wf = p_avg;
-        while (p_wf >= 0) {
-          const q_o = getGasFlow(p_wf);
-          points.push({ p_wf, q_o });
-          p_wf -= deltaP;
+      } else if (methodUsed === 'Delta Pressure') {
+        const dP = val > 0 ? val : 100;
+        for (let p_wf = p_avg; p_wf >= 0; p_wf -= dP) {
+          const q = getGasFlow(p_wf);
+          if (Number.isFinite(q)) points.push({ p_wf, q_o: q });
         }
-        return points;
-      } else {
-        return points;
       }
+      return points;
     }
+
 
     function gas_calculateSteadyStateIPR({
       k,
@@ -447,9 +453,9 @@ export function calculateIPR(params: any, iprPhase: string, flowRegime: string, 
       // Model
       zMethodCode,
     }: any): { p_wf: number; q_o: number }[] {
-
+      console.log("Case", zMethodCode);
       const J = (k * h) / (1424 * (T_res + 459.67) * (Math.log(re / rw) + s));
-    
+      console.log("J value", J);
       // 3) Prepare output
       const points: { p_wf: number; q_o: number }[] = [];
       const methodUsed = spacingMethod || "";
@@ -558,3 +564,108 @@ export function calculateIPR(params: any, iprPhase: string, flowRegime: string, 
       }
     }
     
+    // --- OPR: Single-phase incompressible oil ------------------------------
+
+export function calculateOPR_SinglePhaseOil(params: any): { p_wf: number; q_o: number }[] {
+  const {
+    // geometry & path
+    L,             // ft
+    D_in,          // inches
+    thetaDeg = 90, // deg from horizontal; + up
+    eps = 0.0006,  // can be absolute(ft) or relative(ε/D) if small
+    // fluid & surface pressures
+    rho,           // lbm/ft3
+    muo,           // cP
+    p_wh = 0,      // psi
+    // spacing
+    spacingMethod = 'Number of Points',
+    spacingValue,
+    // hint & model
+    qHint,         // optional: use IPR max q if available
+    frictionModel = 'Chen (1979)',
+  } = params;
+
+  if (![L, D_in, rho, muo].every(Number.isFinite)) return [];
+
+  const thetaRad = (thetaDeg * Math.PI) / 180.0;
+  const D_ft = D_in / 12;
+
+  // Treat very small ε as relative roughness and convert to absolute(ft)
+  // (e.g., user enters 0.0006 → absolute ε = 0.0006 * D_ft)
+  let eps_ft = eps;
+  if (eps <= 0.01) eps_ft = eps * D_ft;
+
+  const gamma = rho / 62.4; // specific gravity
+  const deltaP_PE = 0.433 * gamma * (L * Math.sin(thetaRad)); // psi
+
+  const Re_of = (q: number) => Math.max(1, 1.4777 * rho * q / (D_in * muo));
+
+  function fanning(Re: number): number {
+    if (Re < 2100) return 16 / Re; // laminar
+    switch (frictionModel as FrictionModel) {
+      case 'Swamee-Jain': {
+        const rel = eps_ft / D_ft;
+        const fM = 0.25 / Math.pow(Math.log10(rel / 3.7 + 5.74 / Math.pow(Re, 0.9)), 2);
+        return fM / 4;
+      }
+      case 'Colebrook-White': {
+        const rel = eps_ft / D_ft;
+        let fM = 0.02;
+        for (let i = 0; i < 25; i++) {
+          const rhs = -2 * Math.log10(rel / 3.7 + 2.51 / (Re * Math.sqrt(fM)));
+          fM = 1 / (rhs * rhs);
+        }
+        return fM / 4;
+      }
+      case 'Laminar (auto)':
+      case 'Chen (1979)':
+      default: {
+        const rel = eps_ft / D_ft;
+        const A = -2 * Math.log10(
+          rel / 3.7065
+          - (5.0452 / Re) * Math.log10(Math.pow(rel, 1.1098) / 2.8257 + Math.pow(7.149 / Re, 0.8981))
+        );
+        const fM = 1 / (A * A);
+        return fM / 4;
+      }
+    }
+  }
+
+  const frictionDP = (q: number) => {
+    const Re = Re_of(q);
+    const fF = fanning(Re);
+    return 7.35e-7 * fF * rho * q * q * L / Math.pow(D_in, 5); // psi
+  };
+
+  // ---- choose q-range automatically (no q_max input) ----
+  // Prefer IPR hint; otherwise pick a Reynolds-based span around Re≈1e5
+  let qSpan = Number.isFinite(qHint) && qHint > 0
+    ? (qHint as number) * 1.25
+    : (1e5 * D_in * muo) / (1.4777 * rho) * 1.2; // ~Re=1e5
+
+  // clamp to a reasonable plotting band
+  qSpan = Math.min(Math.max(qSpan, 300), 20000);
+
+  const points: { p_wf: number; q_o: number }[] = [];
+  const defaultN = 25;
+  const val = Number(spacingValue);
+
+  if (spacingMethod === 'Delta Flowrate') {
+    const dq = val > 0 ? val : Math.max(10, qSpan / defaultN);
+    for (let q = 0; q <= qSpan + 1e-9; q += dq) {
+      const p_wf = p_wh + deltaP_PE + frictionDP(q);
+      points.push({ p_wf, q_o: q });
+    }
+  } else {
+    const N = val > 0 ? val : defaultN;
+    for (let i = 0; i < N; i++) {
+      const frac = i / (N - 1);
+      const q = qSpan * frac;
+      const p_wf = p_wh + deltaP_PE + frictionDP(q);
+      points.push({ p_wf, q_o: q });
+    }
+  }
+
+  return points;
+}
+
