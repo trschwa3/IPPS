@@ -1,70 +1,11 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import React, { useEffect } from 'react';
 import unitSystems from '../../unit/unitSystems.json';
 import UnitConverter from '../../unit/UnitConverter';
-
-// ↓ Add this local type so you can use frictionModel in props/JSX without import cycles
-export type FrictionModel =
-  | 'Chen (1979)'
-  | 'Swamee-Jain'
-  | 'Colebrook-White'
-  | 'Laminar (auto)';
-
-export interface FieldConfig {
-  name: string;
-  label: string;
-  dimension: string; // used to select conversion factors (e.g. "pressure", "length", etc.)
-  baseMin?: number;
-  baseMax?: number;
-  unit: string; // the base unit for the field (e.g., "psi")
-}
-
-// Oil common fields
-export const oilCommonFields: FieldConfig[] = [
-  { name: 'k',   label: 'Permeability, k',        dimension: 'permeability', baseMin: 1e-6,   unit: 'mD'       },
-  { name: 'h',   label: 'Thickness, h',           dimension: 'length',       baseMin: 1,   unit: 'ft'       },
-  { name: 'Bo',  label: 'Formation Vol. Factor, B₀', dimension: 'oil FVF',  baseMin: 0.1,   unit: 'bbl/STB'  },
-  { name: 'muo', label: 'Oil Viscosity, μ₀',      dimension: 'viscosity',    baseMin: 0.01,   unit: 'cp'       },
-  { name: 's',   label: 'Skin Factor, S',         dimension: 'skin',         baseMin: -7,  baseMax: 100, unit: 'dimensionless' },
-  { name: 'rw',  label: 'Well Radius, rₒ',        dimension: 'length',       baseMin: 0.01,   unit: 'ft'       },
-];
-
-// Gas common fields
-export const gasCommonFields: FieldConfig[] = [
-  { name: 'k',    label: 'Permeability, k',      dimension: 'permeability', baseMin: 0,    unit: 'mD'   },
-  { name: 'h',    label: 'Thickness, h',         dimension: 'length',       baseMin: 1,    unit: 'ft'   },
-  { name: 's',    label: 'Skin Factor, S',       dimension: 'skin',         baseMin: -7,   baseMax: 100, unit: 'dimensionless' },
-  { name: 'rw',   label: 'Well Radius, rₒ',      dimension: 'length',       baseMin: 0.01, baseMax: 1,   unit: 'ft' },
-  { name: 'sg_g', label: 'Gas Specific Gravity, Sg', dimension: 'gasSG',    baseMin: 0.56, baseMax: 1,   unit: 'dimensionless' },
-  { name: 'T_res',label: 'Reservoir Temperature, Tᵣ', dimension: 'temperature', baseMin: 100, baseMax: 350, unit: '°F' },
-];
-
-// Liquid transient fields
-export const TransientFields: FieldConfig[] = [
-  { name: 'phi', label: 'Porosity, φ (%)',           dimension: 'porosity',       baseMin: 1,    baseMax: 50,   unit: '%'     },
-  { name: 'ct',  label: 'Total Compressibility, cₜ', dimension: 'compressibility', baseMin: 1e-7, baseMax: 1e-3, unit: 'psi⁻¹' },
-  { name: 't',   label: 'Time, t',                   dimension: 'time',            baseMin: 1e-3, baseMax: 10000, unit: 'hrs'   },
-  { name: 'pi',  label: 'Initial Reservoir Pressure, pi', dimension: 'pressure',  baseMin: 500,  baseMax: 20000, unit: 'psi'   },
-];
-
-// Pseudosteady fields (for both oil and gas)
-export const PseudosteadyFields: FieldConfig[] = [
-  { name: 'p_avg', label: 'Average Reservoir Pressure, p_avg', dimension: 'pressure', baseMin: 500, baseMax: 20000, unit: 'psi' },
-  { name: 're',   label: 'Reservoir Radius, rᵣ',            dimension: 'length',   baseMin: 0.1, unit: 'ft'      },
-];
-
-// Steady-state fields (for both oil and gas)
-export const SteadystateFields: FieldConfig[] = [
-  { name: 'pe', label: 'Boundary Pressure, pe', dimension: 'pressure', baseMin: 500,  baseMax: 20000, unit: 'psi' },
-  { name: 're', label: 'Reservoir Radius, rᵣ',  dimension: 'length',   baseMin: 0.1,  unit: 'ft'      },
-];
-
-// Two-phase fields (for two-phase calculations)
-export const TwoPhaseFields: FieldConfig[] = [
-  { name: 'p_avg', label: 'Average Reservoir Pressure, p_avg', dimension: 'pressure', baseMin: 500,  baseMax: 20000, unit: 'psi' },
-  { name: 'pb',   label: 'Saturation Pressure, pb',           dimension: 'pressure', baseMin: 300,  baseMax: 5000,  unit: 'psi' },
-  { name: 'a',    label: 'Bowedness, a',                      dimension: 'bowedness', baseMin: 0.8, baseMax: 1,     unit: 'dimensionless' },
-  { name: 're',   label: 'Reservoir Radius, rᵣ',              dimension: 'length',    baseMin: 0.1, unit: 'ft'      },
-];
+import { FieldConfig, oilCommonFields, gasCommonFields, TransientFields, PseudosteadyFields, SteadystateFields, TwoPhaseFields } from './config/fieldConfigs';
+import { FrictionModel } from './types';
+import OPROilFields from './OPROilFields';
+import OPRGasFields from './OPRGasFields';
 
 // NodalAnalysisForm.tsx (props)
 interface NodalAnalysisFormProps {
@@ -72,6 +13,8 @@ interface NodalAnalysisFormProps {
   setInputMode: (m: 'IPR' | 'OPR') => void;       
   iprPhase: string;
   setIprPhase: (phase: string) => void;
+  oprPhase: string;
+  setOprPhase: (phase: string) => void;
   flowRegime: string;
   setFlowRegime: (regime: string) => void;
   formValues: any;
@@ -111,8 +54,10 @@ const NodalAnalysisForm: React.FC<NodalAnalysisFormProps> = ({
   inputMode,
   setInputMode,
   iprPhase,
-  zMethod,
   setIprPhase,
+  oprPhase,
+  setOprPhase,
+  zMethod,
   setzMethod = () => {},   // ← default no-op fixes runtime + TS
   flowRegime,
   setFlowRegime,
@@ -133,7 +78,8 @@ const NodalAnalysisForm: React.FC<NodalAnalysisFormProps> = ({
     }
   }, [iprPhase, flowRegime, setFlowRegime]);
 
-  const gasOilPhaseOptions = ['Liquid', 'Two-phase', 'Gas'];
+  const phaseOptions = ['Liquid', 'Two-phase', 'Gas'];
+  const allowedOprOptions = iprPhase ? phaseOptions.filter(p => p === iprPhase) : phaseOptions;
   // For Two-phase, only Pseudosteady-State is allowed; otherwise, all three are allowed.
   const regimeOptions =
     iprPhase === 'Two-phase'
@@ -173,7 +119,7 @@ const NodalAnalysisForm: React.FC<NodalAnalysisFormProps> = ({
   // Enable editing only if iprPhase is selected and, for liquids, flowRegime is selected.
   const canEditFields =
     inputMode === 'OPR'
-      ? true
+      ? oprPhase !== ''
       : iprPhase !== '' && (iprPhase !== 'Liquid' || flowRegime !== '');
 
   /** Handler for numeric inputs */
@@ -203,6 +149,9 @@ const NodalAnalysisForm: React.FC<NodalAnalysisFormProps> = ({
     const { name, value } = e.target;
     if (name === 'iprPhase') {
       setIprPhase(value);
+      if (value !== oprPhase) setOprPhase('');
+    } else if (name === 'oprPhase') {
+      setOprPhase(value);
     } else if (name === 'flowRegime') {
       setFlowRegime(value);
     } else if (name === 'zMethod') {
@@ -341,7 +290,7 @@ const NodalAnalysisForm: React.FC<NodalAnalysisFormProps> = ({
             <label style={labelStyle}>IPR Phase:</label>
             <select name="iprPhase" value={iprPhase} onChange={handleTextChange} style={selectStyle}>
               <option value="">-- Select --</option>
-              {gasOilPhaseOptions.map((p) => (
+              {phaseOptions.map((p) => (
                 <option key={p} value={p}>
                   {p}
                 </option>
@@ -429,100 +378,42 @@ const NodalAnalysisForm: React.FC<NodalAnalysisFormProps> = ({
       })}
 
       {inputMode === 'OPR' && (
-        <fieldset style={{ marginTop: 12 }}>
-          <legend>OPR — Single-phase Oil</legend>
-
+        <>
           <div style={rowStyle}>
-            <label style={labelStyle}>Wellhead Pressure, pₕ:</label>
-            <input
-              type="number"
-              step="any"
-              name="p_wh"
-              value={formValues.p_wh ?? ''}
-              onChange={handleNumericChange}
-              style={inputStyle}
-            />
-            <span style={unitStyle}>({userUnitsTyped['pressure'] || 'psi'})</span>
+            <label style={labelStyle}>OPR Phase:</label>
+            <select name="oprPhase" value={oprPhase} onChange={handleTextChange} style={selectStyle}>
+              <option value="">-- Select --</option>
+              {allowedOprOptions.map((p) => (
+                <option key={p} value={p}>
+                  {p}
+                </option>
+              ))}
+            </select>
           </div>
 
-          <div style={rowStyle}>
-            <label style={labelStyle}>Tubing I.D., D:</label>
-            <input
-              type="number"
-              step="any"
-              name="D"
-              value={formValues.D ?? ''}
-              onChange={handleNumericChange}
-              style={inputStyle}
+          {oprPhase === 'Liquid' && (
+            <OPROilFields
+              formValues={formValues}
+              handleNumericChange={handleNumericChange}
+              userUnits={userUnitsTyped}
+              diameterUnit={diameterUnit}
             />
-            <span style={unitStyle}>({diameterUnit})</span>
-          </div>
+          )}
 
-          <div style={rowStyle}>
-            <label style={labelStyle}>Relative Roughness, ε/D:</label>
-            <input
-              type="number"
-              step="any"
-              name="eps"
-              value={formValues.eps ?? ''}
-              onChange={handleNumericChange}
-              style={inputStyle}
+          {oprPhase === 'Gas' && (
+            <OPRGasFields
+              formValues={formValues}
+              handleNumericChange={handleNumericChange}
+              handleTextChange={handleTextChange}
+              userUnits={userUnitsTyped}
+              diameterUnit={diameterUnit}
+              zMethod={zMethod}
+              zmethodOptions={zmethodOptions}
             />
-            <span style={unitStyle}>(dimensionless)</span>
-          </div>
+          )}
 
-          <div style={rowStyle}>
-            <label style={labelStyle}>Measured Length, L:</label>
-            <input
-              type="number"
-              step="any"
-              name="L"
-              value={formValues.L ?? ''}
-              onChange={handleNumericChange}
-              style={inputStyle}
-            />
-            <span style={unitStyle}>({userUnitsTyped['length'] || 'ft'})</span>
-          </div>
-
-          <div style={rowStyle}>
-            <label style={labelStyle}>Inclination from horizontal, θ:</label>
-            <input
-              type="number"
-              step="any"
-              name="thetaDeg"
-              value={formValues.thetaDeg ?? 90}
-              onChange={handleNumericChange}
-              style={inputStyle}
-            />
-            <span style={unitStyle}>(deg)</span>
-          </div>
-
-          <div style={rowStyle}>
-            <label style={labelStyle}>Density, ρ:</label>
-            <input
-              type="number"
-              step="any"
-              name="rho"
-              value={formValues.rho ?? ''}
-              onChange={handleNumericChange}
-              style={inputStyle}
-            />
-            <span style={unitStyle}>({userUnitsTyped['density'] || 'lbm/ft3'})</span>
-          </div>
-
-          <div style={rowStyle}>
-            <label style={labelStyle}>Oil Viscosity, μ₀:</label>
-            <input
-              type="number"
-              step="any"
-              name="muo"
-              value={formValues.muo ?? ''}
-              onChange={handleNumericChange}
-              style={inputStyle}
-            />
-            <span style={unitStyle}>({userUnitsTyped['viscosity'] || 'cp'})</span>
-          </div>
-        </fieldset>
+          {oprPhase === 'Two-phase' && <p>Two-phase OPR not implemented.</p>}
+        </>
       )}
 
 

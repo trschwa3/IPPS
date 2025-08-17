@@ -4,18 +4,13 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import './NodalAnalysis.css';
 import NodalAnalysisForm from './NodalAnalysisForm';
 import IPRChart from './IPRChart';
-import { calculateIPR, calculateOPR_SinglePhaseOil } from './NodalAnalysisUtils'; // ⬅️ add OPR import
+import { calculateIPR } from "./utils/ipr";
 import UnitConverter from '../../unit/UnitConverter';
 import { OilFVFWidget } from "../../Widgets/OilFVFWidget";
 import { OilViscosityWidget } from "../../Widgets/OilViscosityWidget";
 import unitSystemsData from '../../unit/unitSystems.json';
-import { calculateOPR_SinglePhaseGas } from './NodalAnalysisUtils'; // ⬅️ add this
-
-type FrictionModel =
-  | 'Chen (1979)'
-  | 'Swamee-Jain'
-  | 'Colebrook-White'
-  | 'Laminar (auto)';
+import { calculateOilOPR, calculateGasOPR, calculateTwoPhaseOPR } from "./utils/opr";
+import type { FrictionModel } from "./types";
 
 interface UnitSystemDefinition {
   [key: string]: string | undefined;
@@ -44,6 +39,7 @@ const NodalAnalysis: React.FC = () => {
   const [frictionModel, setFrictionModel] = useState<FrictionModel>('Chen (1979)');
 
   const [iprPhase, setIprPhase] = useState('');
+  const [oprPhase, setOprPhase] = useState('');
   const [zMethod, setzMethod] = useState('');
   const [flowRegime, setFlowRegime] = useState('');
   interface FormValues { [key: string]: number | string | undefined }
@@ -130,19 +126,26 @@ const NodalAnalysis: React.FC = () => {
       const newIprData = calculateIPR({ ...oilfieldVals, spacingMethod: oilfieldVals.spacingMethod, spacingValue: oilfieldVals.spacingValue }, iprPhase, flowRegime, zMethod);
       setIprData(newIprData);
     } else {
-      const iprMaxQHint =
-        iprData && iprData.length && iprPhase !== 'Gas'
-          ? Math.max(...iprData.map(p => p.q_o))
-          : undefined;
+      if (iprPhase && oprPhase && iprPhase !== oprPhase) {
+      alert('OPR phase must match IPR phase');
+      return;
+    }
 
-      const base = { ...oilfieldVals, frictionModel };
+    const iprMaxQHint =
+      iprData && iprData.length && iprPhase !== 'Gas'
+        ? Math.max(...iprData.map(p => p.q_o))
+        : undefined;
 
-      const newOprData =
-        iprPhase === 'Gas'
-          ? calculateOPR_SinglePhaseGas({ ...base, zMethodCode: oilfieldVals.zMethodCode })
-          : calculateOPR_SinglePhaseOil({ ...base, qHint: iprMaxQHint });
-
-      setOprData(newOprData);
+    const base = { ...oilfieldVals, frictionModel };
+    let newOprData: { p_wf: number; q_o: number }[] = [];
+    if (oprPhase === 'Gas') {
+      newOprData = calculateGasOPR({ ...base, zMethodCode: oilfieldVals.zMethodCode });
+    } else if (oprPhase === 'Liquid') {
+      newOprData = calculateOilOPR({ ...base, qHint: iprMaxQHint });
+    } else if (oprPhase === 'Two-phase') {
+      newOprData = calculateTwoPhaseOPR(base);
+    }
+    setOprData(newOprData);
     }
   };
 
@@ -168,6 +171,8 @@ const NodalAnalysis: React.FC = () => {
           setInputMode={setInputMode}
           iprPhase={iprPhase}
           zMethod={zMethod}
+          oprPhase={oprPhase}
+          setOprPhase={setOprPhase}
           setIprPhase={setIprPhase}
           setzMethod={setzMethod}
           flowRegime={flowRegime}
