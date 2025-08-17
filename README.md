@@ -1,64 +1,105 @@
-# IPPS (Introductory Petroleum Production Software)
+# IPPS (Introductory Petroleum Production Software) — v0.0.3
 
-**IPPS** is an open-source project aimed at providing a suite of petroleum engineering tools in a single platform. Although still under development, it already offers several modules for reservoir, well, and production engineering tasks.
+**IPPS** is an open-source suite of petroleum engineering tools. This package currently focuses on **Nodal Analysis** with a React front end and a TypeScript correlation core.
 
-## Overview
+---
 
-This portion of the codebase primarily focuses on **Nodal Analysis** calculations, enabling users to determine well performance based on reservoir and wellbore constraints. The application features a React front end that gathers inputs for both **liquid** and **gas** reservoir scenarios, then computes and displays an **Inflow Performance Relationship (IPR)** curve.
+## What’s in this package
 
-### Recent Updates
-- **Gas Phase Handling**  
-  - Users can now select “Gas” as the IPR phase.  
-  - Relevant gas properties (e.g., specific gravity, reservoir temperature) are validated via min/max constraints.  
-  - Pseudosteady‐state, steady‐state, and transient formulas are partially implemented for gas IPR.
-- **Field-by-Field Validation**  
-  - Each numeric field enforces custom min/max rules in JavaScript (React) with immediate error messaging (e.g., “Must be at least 500 psi”).
-  - HTML attributes `min`/`max` remain for user convenience with numeric spinners.
+- **Nodal Analysis** for both **IPR** (inflow) and **OPR/VLP** (outflow) with an operating-point intersection.
+- Front end in **React** with unit-aware inputs, live validation, and charting.
+- Core correlations implemented in TypeScript under `/Correlations`:
+  - `GasCorrelations.ts` (z-factor, gas viscosity, etc.)
+  - `OilCorrelations.ts` (solution GOR, Bo, μo, etc.)
 
-### Core Capabilities
+---
 
-1. **IPR Calculations for Liquid**  
-   - **Transient:** Uses standard log‐time radial flow equations.  
-   - **Pseudosteady‐State:** Based on closed‐reservoir assumptions and radial flow.  
-   - **Steady‐State:** Ideal open‐boundary solution with constant boundary pressure.
+## New in v0.0.3
 
-2. **(Work‐in‐Progress) IPR Calculations for Gas**  
-   - Basic structure for transient, pseudosteady‐state, and steady‐state gas flow.  
-   - Integrates user inputs (permeability, thickness, skin, etc.) with partial real‐gas `z` correlations (Dranchuk & Abou-Kassem, Dranchuk, Purvis & Robinson, Redlich Kwong, Brill & Beggs).  
-   - Additional validation rules to ensure reservoir temperature is within 100–350 °F, etc.
+- **OPR / Vertical Lift (initial release)**
+  - Single-phase **oil** and **gas** tubing lift wired into the UI.
+  - **Friction model selector** with Fanning factor from model:
+    - Chen (1979), Swamee–Jain, Colebrook–White.
+  - **Relative roughness (ε/D)** replaces absolute roughness; dimensionless and unit-agnostic.
 
-3. **Front-End Forms**  
-   - Dynamically shows/hides input fields depending on chosen IPR phase (Liquid, Gas, Two-phase) and flow regime.  
-   - Immediately flags out-of-range values (e.g., “Skin factor must be ≥ -7”).  
-   - Options for “Spacing Method” (NumPoints, ΔP, ΔQ) let users define how the IPR curve is generated.
+- **Two-Phase IPR (complete)**
+  - Two-phase **IPR** calculations are implemented and selectable in the UI.
+  - **Two-phase OPR** remains on the **to-do** list (see Roadmap).
 
-4. **Charting**  
-   - Uses Chart.js to plot the resulting IPR curve.  
-   - If gas calculations are selected, user sees either partial curves or known incomplete results until the equations are fully tested.
+- **Units & Defaults**
+  - **Oilfield/Imperial**: Tubing ID defaults to **inches**; **SI**: **centimeters**.
+  - **Oil density input behavior**:
+    - When **Oilfield/Imperial** units are active, **IPR and OPR for oil use API gravity** (°API). The app converts to density in the background for all correlations/pressure-loss calcs.
+    - In **SI**, the form requests **density** directly (with optional °API helper planned).
+  - All IPR/OPR inputs and labels are left-aligned for consistency.
 
-### Known Bugs & Limitations
+- **Gas property engine & options**
+  - z-factor methods exposed via dropdown and mapped internally:
+    - Dranchuk & Abou-Kassem (1975), Dranchuk–Purvis–Robinson (1974),
+    - Hall & Yarborough (1974), Redlich–Kwong (1949), Brill & Beggs (1974),
+    - Chart interpolation helper.
+  - `gas_visc_PT` and `z_PT` are available to IPR/OPR where needed.
 
-1. **Overpressured Gas Reservoirs (> ~4500 psi)**  
-   - Some z‐factor correlations (e.g., Dranchuk & Abou‐Kassem) can fail to converge or yield unrealistic \(z\) values above ~4500–5000 psia. This may cause the IPR curve to behave erratically. The team is investigating more stable solvers and iteration damping.  
-   - Also, user must be mindful that certain correlations (e.g. Brill & Beggs) are only validated to ~15,000 psia, so results might be unreliable if the reservoir pressure exceeds that range.
+- **Quality of life**
+  - IPR curve generation correctly orders points from **high pwf → low pwf**.
+  - Field-by-field validation tightened with immediate messages.
 
-2. **OPR / Vertical Lift**  
-   - Not yet implemented. The user can compute only inflow performance. A full nodal analysis needs wellbore/outflow modeling.
+---
 
-3. **UI/UX**  
-   - Some advanced error messages or tooltips not yet implemented.  
-   - Additional PVT data or more complex fluid behaviors may not be fully handled.
+## Current capabilities
 
-### Roadmap
+1. **IPR**
+   - **Liquid (oil)**: Transient, Pseudosteady-State, Steady-State.
+   - **Gas**: Transient / PSS / SS scaffolding with real-gas handling via selected z-method.
+   - **Two-phase**: Implemented for IPR.
+   - **Curve spacing:** NumPoints, ΔP, or ΔQ.
 
-1. **Complete Gas IPR**  
-   Finalize stable real‐gas correlations, especially for higher pressures. Add robust iteration methods for z.  
-2. **Add OPR / Wellbore**  
-   Introduce vertical lift performance, multiphase flow correlations, and choking models for a full nodal analysis solution.  
-3. **Expand Validation & Unit Conversions**  
-   More built‐in safety checks for extreme reservoir parameters. Increase the unit conversions for more specialized metrics.  
-4. **Integration with Other IPPS Modules**  
-   Merge with upcoming modules (e.g., decline‐curve, material balance) in a single user interface, ensuring consistent data management.
+2. **OPR / Vertical Lift**
+   - **Single-phase oil & gas** tubing lift with user-selectable friction model.
+   - Inputs include ε/D (relative roughness), tubing ID, length, and surface/WH pressure.
+   - **Two-phase OPR** is **not** yet available (see Roadmap).
+
+3. **Units & Inputs**
+   - **Oilfield/Imperial**: °API for oil; app converts to density internally.
+   - **SI**: density provided directly.
+   - Unit conversions via `UnitConverter` and `unitSystems.json`.
+
+4. **UI & Validation**
+   - Phase-aware forms (Liquid, Gas, Two-phase) with dynamic field visibility.
+   - Inline errors with min/max hints and sensible defaults.
+
+5. **Charting**
+   - IPR and OPR curves displayed together; **operating point** highlighted when found.
+
+---
+
+## Known issues & limitations
+
+- **High-pressure gas (≳ 4,500–5,000 psia):** some z-methods can be sensitive/unstable. Validate results outside published ranges; damping/robust solvers are being added.
+- **Two-phase OPR:** not yet implemented.
+- **UX polish:** advanced tooltips/guides pending.
+
+---
+
+## Roadmap
+
+1. **Gas IPR hardening**
+   - More stable z-solvers and fallback strategies at high Ppr.
+
+2. **Two-phase lift (OPR)**
+   - Add multiphase correlations and choke models for full-field VLP.
+
+3. **Units & ergonomics**
+   - Add °API↔density helper in SI; broaden guardrails for extreme inputs.
+
+4. **Data export & reproducibility**
+   - Export curves/operating point as CSV/JSON; embed run metadata.
+
+---
+
+## Project layout (high level)
+
+
 
 ## How to Run Locally
 
