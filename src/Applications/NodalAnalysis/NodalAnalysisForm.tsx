@@ -1,36 +1,81 @@
 import React, { useEffect } from 'react';
 import unitSystems from '../../unit/unitSystems.json';
 import UnitConverter from '../../unit/UnitConverter';
-import {
-  FieldConfig,
-  oilCommonFields,
-  gasCommonFields,
-  TransientFields,
-  PseudosteadyFields,
-  SteadystateFields,
-  TwoPhaseFields,
-} from './fieldConfigs';
 
-interface FormValues {
-  [key: string]: number | string | undefined;
+
+export interface FieldConfig {
+  name: string;
+  label: string;
+  dimension: string; // used to select conversion factors (e.g. "pressure", "length", etc.)
+  baseMin?: number;
+  baseMax?: number;
+  unit: string; // the base unit for the field (e.g., "psi")
 }
+
+// Oil common fields
+export const oilCommonFields: FieldConfig[] = [
+  { name: 'k',   label: 'Permeability, k',        dimension: 'permeability', baseMin: 1e-6,   unit: 'mD'       },
+  { name: 'h',   label: 'Thickness, h',           dimension: 'length',       baseMin: 1,   unit: 'ft'       },
+  { name: 'Bo',  label: 'Formation Vol. Factor, B₀', dimension: 'oil FVF',  baseMin: 0.1,   unit: 'bbl/STB'  },
+  { name: 'muo', label: 'Oil Viscosity, μ₀',      dimension: 'viscosity',    baseMin: 0.01,   unit: 'cp'       },
+  { name: 's',   label: 'Skin Factor, s',         dimension: 'skin',         baseMin: -7,  baseMax: 100, unit: 'dimensionless' },
+  { name: 'rw',  label: 'Well Radius, rₒ',        dimension: 'length',       baseMin: 0.01,   unit: 'ft'       },
+];
+
+// Gas common fields
+export const gasCommonFields: FieldConfig[] = [
+  { name: 'k',    label: 'Permeability, k',      dimension: 'permeability', baseMin: 0,    unit: 'mD'   },
+  { name: 'h',    label: 'Thickness, h',         dimension: 'length',       baseMin: 1,    unit: 'ft'   },
+  { name: 's',    label: 'Skin Factor, s',       dimension: 'skin',         baseMin: -7,   baseMax: 100, unit: 'dimensionless' },
+  { name: 'rw',   label: 'Well Radius, rₒ',      dimension: 'length',       baseMin: 0.01, baseMax: 1,   unit: 'ft' },
+  { name: 'sg_g', label: 'Gas Specific Gravity, Sg', dimension: 'gasSG',    baseMin: 0.56, baseMax: 1,   unit: 'dimensionless' },
+  { name: 'T_res',label: 'Reservoir Temperature, Tᵣ', dimension: 'temperature', baseMin: 100, baseMax: 350, unit: '°F' },
+];
+
+// Liquid transient fields
+export const TransientFields: FieldConfig[] = [
+  { name: 'phi', label: 'Porosity, φ (%)',           dimension: 'porosity',       baseMin: 1,    baseMax: 50,   unit: '%'     },
+  { name: 'ct',  label: 'Total Compressibility, cₜ', dimension: 'compressibility', baseMin: 1e-7, baseMax: 1e-3, unit: 'psi⁻¹' },
+  { name: 't',   label: 'Time, t',                   dimension: 'time',            baseMin: 1e-3, baseMax: 10000, unit: 'hrs'   },
+  { name: 'pi',  label: 'Initial Reservoir Pressure, pi', dimension: 'pressure',  baseMin: 500,  baseMax: 20000, unit: 'psi'   },
+];
+
+// Pseudosteady fields (for both oil and gas)
+export const PseudosteadyFields: FieldConfig[] = [
+  { name: 'p_avg', label: 'Average Reservoir Pressure, p_avg', dimension: 'pressure', baseMin: 500, baseMax: 20000, unit: 'psi' },
+  { name: 're',   label: 'Reservoir Radius, rᵣ',            dimension: 'length',   baseMin: 0.1, unit: 'ft'      },
+];
+
+// Steady-state fields (for both oil and gas)
+export const SteadystateFields: FieldConfig[] = [
+  { name: 'pe', label: 'Boundary Pressure, pe', dimension: 'pressure', baseMin: 500,  baseMax: 20000, unit: 'psi' },
+  { name: 're', label: 'Reservoir Radius, rᵣ',  dimension: 'length',   baseMin: 0.1,  unit: 'ft'      },
+];
+
+// Two-phase fields (for two-phase calculations)
+export const TwoPhaseFields: FieldConfig[] = [
+  { name: 'p_avg', label: 'Average Reservoir Pressure, p_avg', dimension: 'pressure', baseMin: 500,  baseMax: 20000, unit: 'psi' },
+  { name: 'pb',   label: 'Saturation Pressure, pb',           dimension: 'pressure', baseMin: 300,  baseMax: 5000,  unit: 'psi' },
+  { name: 'a',    label: 'Bowedness, a',                      dimension: 'bowedness', baseMin: 0.8, baseMax: 1,     unit: 'dimensionless' },
+  { name: 're',   label: 'Reservoir Radius, rᵣ',              dimension: 'length',    baseMin: 0.1, unit: 'ft'      },
+];
 
 // NodalAnalysisForm.tsx (props)
 interface NodalAnalysisFormProps {
-  inputMode: 'IPR' | 'OPR';
-  setInputMode: (mode: 'IPR' | 'OPR') => void;
+  inputMode: 'IPR' | 'OPR';    
+  setInputMode: (m: 'IPR' | 'OPR') => void;     // ⬅️ NEW             // ⬅️ NEW
   iprPhase: string;
   setIprPhase: (phase: string) => void;
   flowRegime: string;
   setFlowRegime: (regime: string) => void;
-  formValues: FormValues;
-  setFormValues: React.Dispatch<React.SetStateAction<FormValues>>;
+  formValues: any;
+  setFormValues: (vals: any) => void;
   onCalculate: () => void;
   selectedUnitSystem: string;
-  frictionModel: string;
-  setFrictionModel: (m: string) => void;
   zMethod?: string;
   setzMethod?: (m: string) => void;
+  frictionModel?: FrictionModel;                 // ⬅️ NEW
+  setFrictionModel?: (m: FrictionModel) => void; // ⬅️ NEW
 }
 
 /** A helper that formats numeric limits with “smart” rules:
@@ -58,7 +103,6 @@ function formatLimit(value: number): string {
 
 const NodalAnalysisForm: React.FC<NodalAnalysisFormProps> = ({
   inputMode,
-  setInputMode,
   iprPhase,
   zMethod,
   setIprPhase,
@@ -69,8 +113,6 @@ const NodalAnalysisForm: React.FC<NodalAnalysisFormProps> = ({
   setFormValues,
   onCalculate,
   selectedUnitSystem,
-  frictionModel,
-  setFrictionModel,
 }) => {
 
   const [errors, setErrors] = React.useState<{ [key: string]: string }>({});
@@ -131,7 +173,7 @@ const NodalAnalysisForm: React.FC<NodalAnalysisFormProps> = ({
     if (value === '') {
       // User cleared the field
       setErrors((prev) => ({ ...prev, [name]: '' }));
-      setFormValues((prev) => ({ ...prev, [name]: '' }));
+      setFormValues((prev: any) => ({ ...prev, [name]: '' }));
       return;
     }
     let parsed = parseFloat(value);
@@ -140,11 +182,11 @@ const NodalAnalysisForm: React.FC<NodalAnalysisFormProps> = ({
     }
     // Example: special logic for pb if needed
     if (name === 'pb' && isNaN(parsed)) {
-      parsed = Number(formValues.p_avg ?? 3000);
+      parsed = formValues.p_avg || 3000;
     }
     const errorMsg = validateField(name, parsed);
     setErrors((prev) => ({ ...prev, [name]: errorMsg }));
-    setFormValues((prev) => ({ ...prev, [name]: parsed }));
+    setFormValues((prev: any) => ({ ...prev, [name]: parsed }));
   };
 
   /** Handler for text/select inputs */
@@ -157,7 +199,7 @@ const NodalAnalysisForm: React.FC<NodalAnalysisFormProps> = ({
     } else if (name === 'zMethod') {
       setzMethod(value);
     } else {
-      setFormValues((prev) => ({ ...prev, [name]: value }));
+      setFormValues((prev: any) => ({ ...prev, [name]: value }));
     }
   };
 
@@ -257,35 +299,29 @@ const NodalAnalysisForm: React.FC<NodalAnalysisFormProps> = ({
 
   return (
     <div style={{ border: '1px solid #ccc', padding: '1rem', borderRadius: '4px', maxWidth: '600px' }}>
-      <div className="top-controls">
-        <span><b>Inputs:</b></span>
-        <label>
-          <input
-            type="radio"
-            checked={inputMode === 'IPR'}
-            onChange={() => setInputMode('IPR')}
-          /> IPR
-        </label>
-        <label>
-          <input
-            type="radio"
-            checked={inputMode === 'OPR'}
-            onChange={() => setInputMode('OPR')}
-          /> OPR
-        </label>
-
-        {inputMode === 'OPR' && (
-          <>
-            <span><b>Friction factor:</b></span>
-            <select value={frictionModel} onChange={(e) => setFrictionModel(e.target.value)}>
-              <option>Chen (1979)</option>
-              <option>Swamee-Jain</option>
-              <option>Colebrook-White</option>
-              <option>Laminar (auto)</option>
-            </select>
-          </>
-        )}
-      </div>
+      {/* Toolbar: IPR/OPR toggle + friction model (only when OPR) */}
+<div className="inputs-toolbar" style={{ marginBottom: '0.75rem', display: 'flex', gap: '1rem', alignItems: 'center' }}>
+  <div>
+    <strong>Inputs:</strong>{' '}
+    <label style={{ marginLeft: 6 }}>
+      <input type="radio" checked={inputMode === 'IPR'} onChange={() => setInputMode('IPR')} /> IPR
+    </label>
+    <label style={{ marginLeft: 10 }}>
+      <input type="radio" checked={inputMode === 'OPR'} onChange={() => setInputMode('OPR')} /> OPR
+    </label>
+  </div>
+  {inputMode === 'OPR' && setFrictionModel && (
+    <div>
+      <strong>Friction:</strong>{' '}
+      <select value={frictionModel} onChange={e => setFrictionModel(e.target.value as FrictionModel)}>
+        <option>Chen (1979)</option>
+        <option>Swamee-Jain</option>
+        <option>Colebrook-White</option>
+        <option>Laminar (auto)</option>
+      </select>
+    </div>
+  )}
+</div>
 
       <h3>{inputMode} Inputs (Units: {selectedUnitSystem || 'Unknown'})</h3>
 
@@ -388,7 +424,7 @@ const NodalAnalysisForm: React.FC<NodalAnalysisFormProps> = ({
           <legend>OPR — Single-phase Oil</legend>
 
           <div style={rowStyle}>
-            <label style={labelStyle}>Wellhead Pressure pₕ:</label>
+            <label style={labelStyle}>Wellhead Pressure pₕ (psi):</label>
             <input
               type="number"
               step="any"
@@ -401,7 +437,7 @@ const NodalAnalysisForm: React.FC<NodalAnalysisFormProps> = ({
           </div>
 
           <div style={rowStyle}>
-            <label style={labelStyle}>Tubing I.D., D:</label>
+            <label style={labelStyle}>Tubing I.D., D (length units):</label>
             <input
               type="number"
               step="any"
@@ -414,7 +450,7 @@ const NodalAnalysisForm: React.FC<NodalAnalysisFormProps> = ({
           </div>
 
           <div style={rowStyle}>
-            <label style={labelStyle}>Roughness ε:</label>
+            <label style={labelStyle}>Roughness ε (length units):</label>
             <input
               type="number"
               step="any"
@@ -477,7 +513,6 @@ const NodalAnalysisForm: React.FC<NodalAnalysisFormProps> = ({
             />
             <span style={unitStyle}>({userUnitsTyped['viscosity'] || 'cp'})</span>
           </div>
-
         </fieldset>
       )}
 

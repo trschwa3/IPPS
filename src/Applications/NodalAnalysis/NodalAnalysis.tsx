@@ -9,6 +9,7 @@ import UnitConverter from '../../unit/UnitConverter';
 import { OilFVFWidget } from "../../Widgets/OilFVFWidget";
 import { OilViscosityWidget } from "../../Widgets/OilViscosityWidget";
 import unitSystemsData from '../../unit/unitSystems.json';
+import { calculateOPR_SinglePhaseGas } from './NodalAnalysisUtils'; // ⬅️ add this
 
 type FrictionModel =
   | 'Chen (1979)'
@@ -66,6 +67,7 @@ const NodalAnalysis: React.FC = () => {
       { key: 'muo', type: 'viscosity', standard: 'cp' },
       { key: 'ct', type: 'compressibility', standard: '1/psi' },
       { key: 'T_res', type: 'temperature', standard: '°F' },
+      { key: 'T_surf', type: 'temperature', standard: '°F' }, // ⬅️ NEW
       { key: 'Bo', type: 'oil FVF', standard: 'bbl/STB', userKey: 'oilFVF' },
       { key: 't', type: 'time', standard: 'hrs' },
       // OPR
@@ -73,6 +75,7 @@ const NodalAnalysis: React.FC = () => {
       { key: 'eps', type: 'length', standard: 'ft' },
       { key: 'p_wh', type: 'pressure', standard: 'psi' },
     ];
+    if (result.sg_g !== undefined) result.sg_g = Number(result.sg_g);
 
     conversionMap.forEach(({ key, type, standard, userKey }) => {
       const value = result[key];
@@ -122,17 +125,18 @@ const NodalAnalysis: React.FC = () => {
       const newIprData = calculateIPR({ ...oilfieldVals, spacingMethod: oilfieldVals.spacingMethod, spacingValue: oilfieldVals.spacingValue }, iprPhase, flowRegime, zMethod);
       setIprData(newIprData);
     } else {
-      // hint: max IPR q if it’s an oil IPR; otherwise undefined
       const iprMaxQHint =
         iprData && iprData.length && iprPhase !== 'Gas'
           ? Math.max(...iprData.map(p => p.q_o))
           : undefined;
 
-      const newOprData = calculateOPR_SinglePhaseOil({
-        ...oilfieldVals,
-        frictionModel,
-        qHint: iprMaxQHint, // ← optional
-      });
+      const base = { ...oilfieldVals, frictionModel };
+
+      const newOprData =
+        iprPhase === 'Gas'
+          ? calculateOPR_SinglePhaseGas({ ...base, zMethodCode: oilfieldVals.zMethodCode })
+          : calculateOPR_SinglePhaseOil({ ...base, qHint: iprMaxQHint });
+
       setOprData(newOprData);
     }
   };
