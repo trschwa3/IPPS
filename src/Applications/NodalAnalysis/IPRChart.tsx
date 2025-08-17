@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -12,6 +12,7 @@ import {
 import { Line } from 'react-chartjs-2';
 import unitSystems from '../../unit/unitSystems.json';
 import UnitConverter from '../../unit/UnitConverter';
+import type { UnitSystems, UnitSystemDefinition } from '../../unit/UnitSystems';
 
 ChartJS.register(
   CategoryScale,
@@ -41,27 +42,25 @@ const IPRChart: React.FC<IPRChartProps> = ({
   selectedUnitSystem,
   iprPhase,
 }) => {
-  if (!iprData || iprData.length === 0) {
-    return <p>No IPR data yet. Please select phase/regime, enter parameters, and click "Calculate."</p>;
-  }
-
   // --- Units & defaults ------------------------------------------------------
   const flowUnits = Object.keys(UnitConverter.flowrateFactors);
   const pressureUnits = Object.keys(UnitConverter.pressureFactors);
 
-  const userUnits = (unitSystems as any)[selectedUnitSystem] || {};
+  const allUnits = unitSystems as UnitSystems;
+  const userUnits: UnitSystemDefinition = allUnits[selectedUnitSystem] || {} as UnitSystemDefinition;
   const userFlowUnit = userUnits.flowrate;
   const userPressUnit = userUnits.pressure;
 
   const fallbackFlowUnit = flowUnits[0] || 'm³/day';
   const fallbackPressUnit = pressureUnits[0] || 'Pa';
 
-  const computeDefaultFlowUnit = () =>
+  const computeDefaultFlowUnit = useCallback(() => (
     iprPhase === 'Gas' && selectedUnitSystem === 'Oil Field'
       ? 'MCF/day'
       : (userFlowUnit && flowUnits.includes(userFlowUnit))
         ? userFlowUnit
-        : fallbackFlowUnit;
+        : fallbackFlowUnit
+  ), [iprPhase, selectedUnitSystem, userFlowUnit, flowUnits, fallbackFlowUnit]);
 
   const defaultPressUnit =
     userPressUnit && pressureUnits.includes(userPressUnit)
@@ -78,7 +77,7 @@ const IPRChart: React.FC<IPRChartProps> = ({
 
   useEffect(() => {
     setXUnit(computeDefaultFlowUnit());
-  }, [iprPhase, selectedUnitSystem]);
+  }, [computeDefaultFlowUnit]);
 
   const safeXUnit = flowUnits.includes(xUnit) ? xUnit : fallbackFlowUnit;
   const safeYUnit = pressureUnits.includes(yUnit) ? yUnit : fallbackPressUnit;
@@ -192,10 +191,16 @@ const IPRChart: React.FC<IPRChartProps> = ({
   };
 
   // --- Render ---------------------------------------------------------------
+  const hasData = iprData && iprData.length > 0;
+
   return (
     <div style={{ marginLeft: '1rem' }}>
-      <div style={{ border: '1px solid #ccc', padding: '1rem', marginBottom: '1rem' }}>
-        <h4>Chart Options</h4>
+      {!hasData ? (
+        <p>No IPR data yet. Please select phase/regime, enter parameters, and click "Calculate."</p>
+      ) : (
+        <>
+        <div style={{ border: '1px solid #ccc', padding: '1rem', marginBottom: '1rem' }}>
+          <h4>Chart Options</h4>
 
         <div style={{ marginBottom: '0.5rem' }}>
           <label style={{ marginRight: '0.5rem' }}>Flow Axis Unit:</label>
@@ -261,7 +266,9 @@ const IPRChart: React.FC<IPRChartProps> = ({
         </div>
       </div>
 
-      <Line data={data} options={options} width={600} height={400} />
+          <Line data={data} options={options} width={600} height={400} />
+        </>
+      )}
     </div>
   );
 };

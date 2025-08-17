@@ -45,16 +45,17 @@ const NodalAnalysis: React.FC = () => {
   const [iprPhase, setIprPhase] = useState('');
   const [zMethod, setzMethod] = useState('');
   const [flowRegime, setFlowRegime] = useState('');
-  const [formValues, setFormValues] = useState<any>({});
+  interface FormValues { [key: string]: number | string | undefined }
+  const [formValues, setFormValues] = useState<FormValues>({});
 
   const [iprData, setIprData] = useState<Array<{ p_wf: number; q_o: number }>>([]);
   const [oprData, setOprData] = useState<Array<{ p_wf: number; q_o: number }>>([]); // ⬅️ NEW
 
-  function convertToOilfield(values: any) {
-    const userUnits = unitSystems[selectedUnitSystem] || {};
-    const result = { ...values };
+  function convertToOilfield(values: FormValues) {
+    const userUnits = (unitSystems[selectedUnitSystem] as Record<string, string>) || {};
+    const result: FormValues = { ...values };
 
-    const conversionMap = [
+    const conversionMap: Array<{ key: string; type: string; standard: string; userKey?: string }> = [
       { key: 'pi', type: 'pressure', standard: 'psi' },
       { key: 'p_avg', type: 'pressure', standard: 'psi' },
       { key: 'pe', type: 'pressure', standard: 'psi' },
@@ -74,26 +75,27 @@ const NodalAnalysis: React.FC = () => {
     ];
 
     conversionMap.forEach(({ key, type, standard, userKey }) => {
-      if (result[key] !== undefined) {
-        const fromUnit = (userKey ? (userUnits as any)[userKey] : (userUnits as any)[type]) || standard;
-        result[key] = UnitConverter.convert(type, result[key], fromUnit, standard);
+      const value = result[key];
+      if (value !== undefined) {
+        const fromUnit = userUnits[userKey ?? type] || standard;
+        result[key] = UnitConverter.convert(type, Number(value), fromUnit, standard);
       }
     });
 
     // Density: support lbm/gal → lbm/ft3 directly
     if (result.rho !== undefined) {
-      const fromRhoUnit = (userUnits as any).density || 'lbm/ft3';
+      const fromRhoUnit = userUnits.density || 'lbm/ft3';
       if (String(fromRhoUnit).toLowerCase().includes('lbm/gal')) {
-        result.rho = result.rho * 7.48051945; // gal→ft3
+        result.rho = Number(result.rho) * 7.48051945; // gal→ft3
       } else {
-        result.rho = UnitConverter.convert('density', result.rho, fromRhoUnit, 'lbm/ft3');
+        result.rho = UnitConverter.convert('density', Number(result.rho), fromRhoUnit, 'lbm/ft3');
       }
     }
 
     // Convert tubing ID → inches (store D_in)
     if (result.D !== undefined) {
-      const fromLen = (userUnits as any).length || 'ft';
-      const D_ft = UnitConverter.convert('length', result.D, fromLen, 'ft');
+      const fromLen = userUnits.length || 'ft';
+      const D_ft = UnitConverter.convert('length', Number(result.D), fromLen, 'ft');
       result.D_in = D_ft * 12.0;
     }
 
@@ -102,11 +104,11 @@ const NodalAnalysis: React.FC = () => {
 
     // Spacing conversions (keep the labels you show in the UI)
     if (result.spacingMethod === 'Delta Pressure' && result.spacingValue !== undefined) {
-      const fromUnit = (userUnits as any).pressure || 'psi';
-      result.spacingValue = UnitConverter.convert('pressure', result.spacingValue, fromUnit, 'psi');
+      const fromUnit = userUnits.pressure || 'psi';
+      result.spacingValue = UnitConverter.convert('pressure', Number(result.spacingValue), fromUnit, 'psi');
     } else if (result.spacingMethod === 'Delta Flowrate' && result.spacingValue !== undefined) {
-      const fromUnit = (userUnits as any).flowrate || 'STB/day';
-      result.spacingValue = UnitConverter.convert('flowrate', result.spacingValue, fromUnit, 'STB/day');
+      const fromUnit = userUnits.flowrate || 'STB/day';
+      result.spacingValue = UnitConverter.convert('flowrate', Number(result.spacingValue), fromUnit, 'STB/day');
     }
 
     return result;
