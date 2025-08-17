@@ -17,7 +17,8 @@ interface FormValues {
 
 // NodalAnalysisForm.tsx (props)
 interface NodalAnalysisFormProps {
-  inputMode: 'IPR' | 'OPR';                 // ⬅️ NEW
+  inputMode: 'IPR' | 'OPR';
+  setInputMode: (mode: 'IPR' | 'OPR') => void;
   iprPhase: string;
   setIprPhase: (phase: string) => void;
   flowRegime: string;
@@ -26,6 +27,8 @@ interface NodalAnalysisFormProps {
   setFormValues: React.Dispatch<React.SetStateAction<FormValues>>;
   onCalculate: () => void;
   selectedUnitSystem: string;
+  frictionModel: string;
+  setFrictionModel: (m: string) => void;
   zMethod?: string;
   setzMethod?: (m: string) => void;
 }
@@ -55,6 +58,7 @@ function formatLimit(value: number): string {
 
 const NodalAnalysisForm: React.FC<NodalAnalysisFormProps> = ({
   inputMode,
+  setInputMode,
   iprPhase,
   zMethod,
   setIprPhase,
@@ -65,6 +69,8 @@ const NodalAnalysisForm: React.FC<NodalAnalysisFormProps> = ({
   setFormValues,
   onCalculate,
   selectedUnitSystem,
+  frictionModel,
+  setFrictionModel,
 }) => {
 
   const [errors, setErrors] = React.useState<{ [key: string]: string }>({});
@@ -251,6 +257,36 @@ const NodalAnalysisForm: React.FC<NodalAnalysisFormProps> = ({
 
   return (
     <div style={{ border: '1px solid #ccc', padding: '1rem', borderRadius: '4px', maxWidth: '600px' }}>
+      <div className="top-controls">
+        <span><b>Inputs:</b></span>
+        <label>
+          <input
+            type="radio"
+            checked={inputMode === 'IPR'}
+            onChange={() => setInputMode('IPR')}
+          /> IPR
+        </label>
+        <label>
+          <input
+            type="radio"
+            checked={inputMode === 'OPR'}
+            onChange={() => setInputMode('OPR')}
+          /> OPR
+        </label>
+
+        {inputMode === 'OPR' && (
+          <>
+            <span><b>Friction factor:</b></span>
+            <select value={frictionModel} onChange={(e) => setFrictionModel(e.target.value)}>
+              <option>Chen (1979)</option>
+              <option>Swamee-Jain</option>
+              <option>Colebrook-White</option>
+              <option>Laminar (auto)</option>
+            </select>
+          </>
+        )}
+      </div>
+
       <h3>{inputMode} Inputs (Units: {selectedUnitSystem || 'Unknown'})</h3>
 
       {inputMode === 'IPR' && (
@@ -352,7 +388,7 @@ const NodalAnalysisForm: React.FC<NodalAnalysisFormProps> = ({
           <legend>OPR — Single-phase Oil</legend>
 
           <div style={rowStyle}>
-            <label style={labelStyle}>Wellhead Pressure pₕ (psi):</label>
+            <label style={labelStyle}>Wellhead Pressure pₕ:</label>
             <input
               type="number"
               step="any"
@@ -365,7 +401,7 @@ const NodalAnalysisForm: React.FC<NodalAnalysisFormProps> = ({
           </div>
 
           <div style={rowStyle}>
-            <label style={labelStyle}>Tubing I.D., D (length units):</label>
+            <label style={labelStyle}>Tubing I.D., D:</label>
             <input
               type="number"
               step="any"
@@ -378,7 +414,7 @@ const NodalAnalysisForm: React.FC<NodalAnalysisFormProps> = ({
           </div>
 
           <div style={rowStyle}>
-            <label style={labelStyle}>Roughness ε (length units):</label>
+            <label style={labelStyle}>Roughness ε:</label>
             <input
               type="number"
               step="any"
@@ -442,18 +478,6 @@ const NodalAnalysisForm: React.FC<NodalAnalysisFormProps> = ({
             <span style={unitStyle}>({userUnitsTyped['viscosity'] || 'cp'})</span>
           </div>
 
-          <div style={rowStyle}>
-            <label style={labelStyle}>qₘₐₓ (extent):</label>
-            <input
-              type="number"
-              step="any"
-              name="q_max"
-              value={formValues.q_max ?? 1000}
-              onChange={handleNumericChange}
-              style={inputStyle}
-            />
-            <span style={unitStyle}>({userUnitsTyped['flowrate'] || 'STB/day'})</span>
-          </div>
         </fieldset>
       )}
 

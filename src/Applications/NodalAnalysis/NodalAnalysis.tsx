@@ -154,42 +154,9 @@ const NodalAnalysis: React.FC = () => {
       </select>
 
       <div className="content-container">
-        {/* NEW: IPR/OPR toggle + friction-factor select (left of graph, above the form) */}
-        <div style={{ marginBottom: '0.75rem' }}>
-          <label style={{ marginRight: 12 }}><b>Inputs:</b></label>
-          <label style={{ marginRight: 8 }}>
-            <input
-              type="radio"
-              checked={inputMode === 'IPR'}
-              onChange={() => setInputMode('IPR')}
-            /> IPR
-          </label>
-          <label>
-            <input
-              type="radio"
-              checked={inputMode === 'OPR'}
-              onChange={() => setInputMode('OPR')}
-            /> OPR
-          </label>
-
-          {inputMode === 'OPR' && (
-            <span style={{ marginLeft: 16 }}>
-              <label style={{ marginRight: 8 }}><b>Friction factor:</b></label>
-              <select
-                value={frictionModel}
-                onChange={(e) => setFrictionModel(e.target.value as FrictionModel)}
-              >
-                <option>Chen (1979)</option>
-                <option>Swamee-Jain</option>
-                <option>Colebrook-White</option>
-                <option>Laminar (auto)</option>
-              </select>
-            </span>
-          )}
-        </div>
-
         <NodalAnalysisForm
-          inputMode={inputMode}              // ⬅️ NEW
+          inputMode={inputMode}
+          setInputMode={setInputMode}
           iprPhase={iprPhase}
           zMethod={zMethod}
           setIprPhase={setIprPhase}
@@ -200,6 +167,8 @@ const NodalAnalysis: React.FC = () => {
           setFormValues={setFormValues}
           onCalculate={handleCalculate}
           selectedUnitSystem={selectedUnitSystem}
+          frictionModel={frictionModel}
+          setFrictionModel={(m) => setFrictionModel(m as FrictionModel)}
         />
 
         {/* Chart now can plot both series */}
