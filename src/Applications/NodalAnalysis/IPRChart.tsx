@@ -34,6 +34,7 @@ interface IPRChartProps {
   oprData?: IPRPoint[];            // ⬅️ optional OPR overlay (single-phase oil)
   selectedUnitSystem: string;
   iprPhase: string;                // 'Gas' or otherwise (for IPR base unit only)
+  oprPhase?: string;               // 'Gas' or 'Oil' (for OPR base unit)
 }
 
 const IPRChart: React.FC<IPRChartProps> = ({
@@ -41,6 +42,7 @@ const IPRChart: React.FC<IPRChartProps> = ({
   oprData,
   selectedUnitSystem,
   iprPhase,
+  oprPhase,
 }) => {
   // --- Units & defaults ------------------------------------------------------
   const flowUnits = useMemo(() => Object.keys(UnitConverter.flowrateFactors), []);
@@ -86,8 +88,13 @@ const IPRChart: React.FC<IPRChartProps> = ({
   const safeYUnit = pressureUnits.includes(yUnit) ? yUnit : fallbackPressUnit;
 
   // Base flow units in native data
+  // Base flow units in native data
   const baseFlowUnitIPR = iprPhase === 'Gas' ? 'MCF/day' : 'STB/day';
-  const baseFlowUnitOPR = 'STB/day'; // OPR we’re plotting is single-phase oil
+
+  // If oprPhase is not provided, assume it matches IPR (your app enforces this anyway)
+  const effectiveOprPhase = oprPhase ?? iprPhase;
+  const baseFlowUnitOPR = effectiveOprPhase === 'Gas' ? 'MCF/day' : 'STB/day';
+
 
   // Convert helpers
   const convertPts = (pts: IPRPoint[], baseFlowUnit: string) =>

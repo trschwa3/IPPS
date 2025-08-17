@@ -20,8 +20,7 @@ export const OPRGasFields: React.FC<OPRGasFieldsProps> = ({
   zMethod,
   zmethodOptions,
 }) => (
-  <fieldset style={{ marginTop: 12 }}>
-    <legend>OPR — Single-phase Gas</legend>
+  <div style={{ marginTop: 12 }}>
 
     <div style={{ display: 'flex', alignItems: 'center', marginBottom: '0.8rem' }}>
       <label style={{ width: '12rem' }}>Wellhead Pressure, pₕ:</label>
@@ -82,7 +81,7 @@ export const OPRGasFields: React.FC<OPRGasFieldsProps> = ({
         ))}
       </select>
     </div>
-  </fieldset>
+  </div>
 );
 
 export default OPRGasFields;

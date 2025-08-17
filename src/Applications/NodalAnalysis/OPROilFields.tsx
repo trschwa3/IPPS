@@ -9,8 +9,7 @@ interface OPROilFieldsProps {
 }
 
 export const OPROilFields: React.FC<OPROilFieldsProps> = ({ formValues, handleNumericChange, userUnits, diameterUnit }) => (
-  <fieldset style={{ marginTop: 12 }}>
-    <legend>OPR — Single-phase Oil</legend>
+  <div style={{ marginTop: 12 }}>
 
     <div style={{ display: 'flex', alignItems: 'center', marginBottom: '0.8rem' }}>
       <label style={{ width: '12rem' }}>Wellhead Pressure, pₕ:</label>
@@ -53,7 +52,7 @@ export const OPROilFields: React.FC<OPROilFieldsProps> = ({ formValues, handleNu
       <input type="number" step="any" name="muo" value={formValues.muo ?? ''} onChange={handleNumericChange} style={{ flex: 1 }} />
       <span style={{ marginLeft: '0.5rem' }}>({userUnits['viscosity'] || 'cp'})</span>
     </div>
-  </fieldset>
+  </div>
 );
 
 export default OPROilFields;

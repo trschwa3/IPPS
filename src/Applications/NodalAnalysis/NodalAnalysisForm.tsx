@@ -3,7 +3,7 @@ import React, { useEffect } from 'react';
 import unitSystems from '../../unit/unitSystems.json';
 import UnitConverter from '../../unit/UnitConverter';
 import { FieldConfig, oilCommonFields, gasCommonFields, TransientFields, PseudosteadyFields, SteadystateFields, TwoPhaseFields } from './config/fieldConfigs';
-import { FrictionModel } from './types';
+import { FrictionModel } from './friction';
 import OPROilFields from './OPROilFields';
 import OPRGasFields from './OPRGasFields';
 
@@ -57,7 +57,7 @@ const NodalAnalysisForm: React.FC<NodalAnalysisFormProps> = ({
   setIprPhase,
   oprPhase,
   setOprPhase,
-  zMethod,
+  zMethod = '',
   setzMethod = () => {},   // ← default no-op fixes runtime + TS
   flowRegime,
   setFlowRegime,
@@ -185,6 +185,7 @@ const NodalAnalysisForm: React.FC<NodalAnalysisFormProps> = ({
     color: '#666',
   };
 
+  
   // Determine which fields to render based on iprPhase and flowRegime.
   let fieldsToRender: FieldConfig[] = [];
   if (iprPhase === 'Liquid') {
@@ -255,6 +256,16 @@ const NodalAnalysisForm: React.FC<NodalAnalysisFormProps> = ({
     return '';
   };
 
+  // Label for the Spacing Value units when "Delta Flowrate" is selected
+  const spacingFlowUnitLabel =
+    formValues.spacingMethod === 'Delta Flowrate'
+      ? ((inputMode === 'OPR' ? oprPhase === 'Gas' : iprPhase === 'Gas')
+          // Gas: use MCF/day in Oil Field; otherwise use the user's flow unit (e.g., m³/day in SI)
+          ? (selectedUnitSystem === 'Oil Field' ? 'MCF/day' : (userUnitsTyped['flowrate'] || 'm³/day'))
+          // Liquids: use the user's flow unit (STB/day in Oil Field; m³/day in SI)
+          : (userUnitsTyped['flowrate'] || (selectedUnitSystem === 'Oil Field' ? 'STB/day' : 'm³/day')))
+      : '';
+
   return (
     <div style={{ border: '1px solid #ccc', padding: '1rem', borderRadius: '4px', maxWidth: '600px' }}>
       {/* Toolbar: IPR/OPR toggle + friction model (only when OPR) */}
@@ -273,9 +284,10 @@ const NodalAnalysisForm: React.FC<NodalAnalysisFormProps> = ({
       <strong>Friction:</strong>{' '}
       <select value={frictionModel} onChange={e => setFrictionModel(e.target.value as FrictionModel)}>
         <option>Chen (1979)</option>
-        <option>Swamee-Jain</option>
-        <option>Colebrook-White</option>
-        <option>Laminar (auto)</option>
+        <option>Swamee–Jain (1976)</option>
+        <option>Colebrook–White (1939)</option>
+        <option>Haaland (1983)</option>
+        <option>Churchill (1977)</option>
       </select>
     </div>
   )}
@@ -351,7 +363,7 @@ const NodalAnalysisForm: React.FC<NodalAnalysisFormProps> = ({
         }
 
         const valueStr = formValues[field.name] ?? '';
-
+        
         return (
           <div style={rowStyle} key={field.name}>
             <label style={labelStyle}>{field.label}:</label>
@@ -435,7 +447,7 @@ const NodalAnalysisForm: React.FC<NodalAnalysisFormProps> = ({
           ))}
         </select>
       </div>
-
+            
       {/* Spacing Value Input */}
       {formValues.spacingMethod && (
         <div style={rowStyle}>
@@ -453,11 +465,10 @@ const NodalAnalysisForm: React.FC<NodalAnalysisFormProps> = ({
             {formValues.spacingMethod === 'Number of Points'
               ? 'points'
               : formValues.spacingMethod === 'Delta Pressure'
-              ? userUnitsTyped['pressure'] || 'psi'
-              : formValues.spacingMethod === 'Delta Flowrate'
-              ? userUnitsTyped['flowrate'] || 'STB/day'
-              : ''}
+              ? (userUnitsTyped['pressure'] || 'psi')
+              : spacingFlowUnitLabel}
           </span>
+
           {errors['spacingValue'] && (
             <div style={{ color: 'red', fontSize: '0.8rem', marginLeft: '0.5rem' }}>
               {errors['spacingValue']}

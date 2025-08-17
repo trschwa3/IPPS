@@ -9,8 +9,8 @@ import UnitConverter from '../../unit/UnitConverter';
 import { OilFVFWidget } from "../../Widgets/OilFVFWidget";
 import { OilViscosityWidget } from "../../Widgets/OilViscosityWidget";
 import unitSystemsData from '../../unit/unitSystems.json';
-import { calculateOilOPR, calculateGasOPR, calculateTwoPhaseOPR } from "./utils/opr";
-import type { FrictionModel } from "./types";
+import { calculateOilOPR, calculateTwoPhaseOPR, calculateGasOPR } from "./utils/opr";
+import type { FrictionModel } from "./friction";
 
 interface UnitSystemDefinition {
   [key: string]: string | undefined;
@@ -112,7 +112,13 @@ const NodalAnalysis: React.FC = () => {
       result.spacingValue = UnitConverter.convert('pressure', Number(result.spacingValue), fromUnit, 'psi');
     } else if (result.spacingMethod === 'Delta Flowrate' && result.spacingValue !== undefined) {
       const fromUnit = userUnits.flowrate || 'STB/day';
-      result.spacingValue = UnitConverter.convert('flowrate', Number(result.spacingValue), fromUnit, 'STB/day');
+
+      // Decide the flow "base" by the active inputMode/phase
+      const isGas =
+        (inputMode === 'OPR' ? oprPhase === 'Gas' : iprPhase === 'Gas');
+
+      const targetBase = isGas ? 'MCF/day' : 'STB/day';
+      result.spacingValue = UnitConverter.convert('flowrate', Number(result.spacingValue), fromUnit, targetBase);
     }
 
     return result;
@@ -131,16 +137,26 @@ const NodalAnalysis: React.FC = () => {
       return;
     }
 
-    const iprMaxQHint =
-      iprData && iprData.length && iprPhase !== 'Gas'
-        ? Math.max(...iprData.map(p => p.q_o))
-        : undefined;
+    const zMap: Record<string, number> = {
+      'Dranchuk & Abou-Kassem - 1975': 0,
+      'Dranchuk, Purvis & Robinson - 1974': 1,
+      'Hall & Yarborough - 1974': 2,
+      'Redlich Kwong - 1949': 3,
+      'Brill & Beggs - 1974': 4,
+      'Chart Interpolation': 5,
+    };
+    const zMethodCode = zMap[zMethod ?? 'Dranchuk & Abou-Kassem - 1975'] ?? 0;
 
     const base = { ...oilfieldVals, frictionModel };
+
     let newOprData: { p_wf: number; q_o: number }[] = [];
     if (oprPhase === 'Gas') {
-      newOprData = calculateGasOPR({ ...base, zMethodCode: oilfieldVals.zMethodCode });
+      newOprData = calculateGasOPR({ ...base, zMethodCode });
     } else if (oprPhase === 'Liquid') {
+      const iprMaxQHint =
+        iprData && iprData.length && iprPhase !== 'Gas'
+          ? Math.max(...iprData.map(p => p.q_o))
+          : undefined;
       newOprData = calculateOilOPR({ ...base, qHint: iprMaxQHint });
     } else if (oprPhase === 'Two-phase') {
       newOprData = calculateTwoPhaseOPR(base);
@@ -188,9 +204,10 @@ const NodalAnalysis: React.FC = () => {
         {/* Chart now can plot both series */}
         <IPRChart
           iprData={iprData}
-          oprData={oprData}                 // ⬅️ NEW
+          oprData={oprData}
           selectedUnitSystem={selectedUnitSystem}
           iprPhase={iprPhase}
+          oprPhase={oprPhase}
         />
 
         <div style={{ marginTop: "2rem" }}>
