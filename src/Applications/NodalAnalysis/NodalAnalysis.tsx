@@ -72,7 +72,6 @@ const NodalAnalysis: React.FC = () => {
       { key: 't', type: 'time', standard: 'hrs' },
       // OPR
       { key: 'L', type: 'length', standard: 'ft' },
-      { key: 'eps', type: 'length', standard: 'ft' },
       { key: 'p_wh', type: 'pressure', standard: 'psi' },
     ];
     if (result.sg_g !== undefined) result.sg_g = Number(result.sg_g);
@@ -85,6 +84,11 @@ const NodalAnalysis: React.FC = () => {
       }
     });
 
+    // Relative roughness (ε/D) is dimensionless; just coerce to number if present
+    if (result.eps !== undefined) {
+      result.eps = Number(result.eps);
+    }
+
     // Density: support lbm/gal → lbm/ft3 directly
     if (result.rho !== undefined) {
       const fromRhoUnit = userUnits.density || 'lbm/ft3';
@@ -95,11 +99,12 @@ const NodalAnalysis: React.FC = () => {
       }
     }
 
-    // Convert tubing ID → inches (store D_in)
     if (result.D !== undefined) {
-      const fromLen = userUnits.length || 'ft';
-      const D_ft = UnitConverter.convert('length', Number(result.D), fromLen, 'ft');
-      result.D_in = D_ft * 12.0;
+      const D_user = Number(result.D);
+      const D_in = (selectedUnitSystem === 'SI')
+        ? (D_user / 2.54)   // cm → in
+        : D_user;           // already inches for Oil Field & Imperial
+      result.D_in = D_in;
     }
 
     // Angle as number

@@ -2,6 +2,12 @@ import React, { useEffect } from 'react';
 import unitSystems from '../../unit/unitSystems.json';
 import UnitConverter from '../../unit/UnitConverter';
 
+// ↓ Add this local type so you can use frictionModel in props/JSX without import cycles
+export type FrictionModel =
+  | 'Chen (1979)'
+  | 'Swamee-Jain'
+  | 'Colebrook-White'
+  | 'Laminar (auto)';
 
 export interface FieldConfig {
   name: string;
@@ -18,7 +24,7 @@ export const oilCommonFields: FieldConfig[] = [
   { name: 'h',   label: 'Thickness, h',           dimension: 'length',       baseMin: 1,   unit: 'ft'       },
   { name: 'Bo',  label: 'Formation Vol. Factor, B₀', dimension: 'oil FVF',  baseMin: 0.1,   unit: 'bbl/STB'  },
   { name: 'muo', label: 'Oil Viscosity, μ₀',      dimension: 'viscosity',    baseMin: 0.01,   unit: 'cp'       },
-  { name: 's',   label: 'Skin Factor, s',         dimension: 'skin',         baseMin: -7,  baseMax: 100, unit: 'dimensionless' },
+  { name: 's',   label: 'Skin Factor, S',         dimension: 'skin',         baseMin: -7,  baseMax: 100, unit: 'dimensionless' },
   { name: 'rw',  label: 'Well Radius, rₒ',        dimension: 'length',       baseMin: 0.01,   unit: 'ft'       },
 ];
 
@@ -26,7 +32,7 @@ export const oilCommonFields: FieldConfig[] = [
 export const gasCommonFields: FieldConfig[] = [
   { name: 'k',    label: 'Permeability, k',      dimension: 'permeability', baseMin: 0,    unit: 'mD'   },
   { name: 'h',    label: 'Thickness, h',         dimension: 'length',       baseMin: 1,    unit: 'ft'   },
-  { name: 's',    label: 'Skin Factor, s',       dimension: 'skin',         baseMin: -7,   baseMax: 100, unit: 'dimensionless' },
+  { name: 's',    label: 'Skin Factor, S',       dimension: 'skin',         baseMin: -7,   baseMax: 100, unit: 'dimensionless' },
   { name: 'rw',   label: 'Well Radius, rₒ',      dimension: 'length',       baseMin: 0.01, baseMax: 1,   unit: 'ft' },
   { name: 'sg_g', label: 'Gas Specific Gravity, Sg', dimension: 'gasSG',    baseMin: 0.56, baseMax: 1,   unit: 'dimensionless' },
   { name: 'T_res',label: 'Reservoir Temperature, Tᵣ', dimension: 'temperature', baseMin: 100, baseMax: 350, unit: '°F' },
@@ -63,7 +69,7 @@ export const TwoPhaseFields: FieldConfig[] = [
 // NodalAnalysisForm.tsx (props)
 interface NodalAnalysisFormProps {
   inputMode: 'IPR' | 'OPR';    
-  setInputMode: (m: 'IPR' | 'OPR') => void;     // ⬅️ NEW             // ⬅️ NEW
+  setInputMode: (m: 'IPR' | 'OPR') => void;       
   iprPhase: string;
   setIprPhase: (phase: string) => void;
   flowRegime: string;
@@ -74,8 +80,8 @@ interface NodalAnalysisFormProps {
   selectedUnitSystem: string;
   zMethod?: string;
   setzMethod?: (m: string) => void;
-  frictionModel?: FrictionModel;                 // ⬅️ NEW
-  setFrictionModel?: (m: FrictionModel) => void; // ⬅️ NEW
+  frictionModel?: FrictionModel;                
+  setFrictionModel?: (m: FrictionModel) => void;
 }
 
 /** A helper that formats numeric limits with “smart” rules:
@@ -103,6 +109,7 @@ function formatLimit(value: number): string {
 
 const NodalAnalysisForm: React.FC<NodalAnalysisFormProps> = ({
   inputMode,
+  setInputMode,
   iprPhase,
   zMethod,
   setIprPhase,
@@ -113,10 +120,12 @@ const NodalAnalysisForm: React.FC<NodalAnalysisFormProps> = ({
   setFormValues,
   onCalculate,
   selectedUnitSystem,
+  frictionModel = 'Chen (1979)',
+  setFrictionModel = () => {}, // ← default no-op fixes runtime + TS
 }) => {
 
   const [errors, setErrors] = React.useState<{ [key: string]: string }>({});
-
+  const diameterUnit = selectedUnitSystem === 'SI' ? 'cm' : 'in';
   // Force pseudosteady-state for Two-phase
   useEffect(() => {
     if (iprPhase === 'Two-phase' && flowRegime !== 'Pseudosteady-State') {
@@ -310,7 +319,7 @@ const NodalAnalysisForm: React.FC<NodalAnalysisFormProps> = ({
       <input type="radio" checked={inputMode === 'OPR'} onChange={() => setInputMode('OPR')} /> OPR
     </label>
   </div>
-  {inputMode === 'OPR' && setFrictionModel && (
+  {inputMode === 'OPR' && (
     <div>
       <strong>Friction:</strong>{' '}
       <select value={frictionModel} onChange={e => setFrictionModel(e.target.value as FrictionModel)}>
@@ -424,7 +433,7 @@ const NodalAnalysisForm: React.FC<NodalAnalysisFormProps> = ({
           <legend>OPR — Single-phase Oil</legend>
 
           <div style={rowStyle}>
-            <label style={labelStyle}>Wellhead Pressure pₕ (psi):</label>
+            <label style={labelStyle}>Wellhead Pressure, pₕ:</label>
             <input
               type="number"
               step="any"
@@ -437,7 +446,7 @@ const NodalAnalysisForm: React.FC<NodalAnalysisFormProps> = ({
           </div>
 
           <div style={rowStyle}>
-            <label style={labelStyle}>Tubing I.D., D (length units):</label>
+            <label style={labelStyle}>Tubing I.D., D:</label>
             <input
               type="number"
               step="any"
@@ -446,11 +455,11 @@ const NodalAnalysisForm: React.FC<NodalAnalysisFormProps> = ({
               onChange={handleNumericChange}
               style={inputStyle}
             />
-            <span style={unitStyle}>({userUnitsTyped['length'] || 'ft'})</span>
+            <span style={unitStyle}>({diameterUnit})</span>
           </div>
 
           <div style={rowStyle}>
-            <label style={labelStyle}>Roughness ε (length units):</label>
+            <label style={labelStyle}>Relative Roughness, ε/D:</label>
             <input
               type="number"
               step="any"
@@ -459,7 +468,7 @@ const NodalAnalysisForm: React.FC<NodalAnalysisFormProps> = ({
               onChange={handleNumericChange}
               style={inputStyle}
             />
-            <span style={unitStyle}>({userUnitsTyped['length'] || 'ft'})</span>
+            <span style={unitStyle}>(dimensionless)</span>
           </div>
 
           <div style={rowStyle}>
@@ -476,7 +485,7 @@ const NodalAnalysisForm: React.FC<NodalAnalysisFormProps> = ({
           </div>
 
           <div style={rowStyle}>
-            <label style={labelStyle}>Inclination θ (deg from horizontal):</label>
+            <label style={labelStyle}>Inclination from horizontal, θ:</label>
             <input
               type="number"
               step="any"
@@ -489,7 +498,7 @@ const NodalAnalysisForm: React.FC<NodalAnalysisFormProps> = ({
           </div>
 
           <div style={rowStyle}>
-            <label style={labelStyle}>Density ρ:</label>
+            <label style={labelStyle}>Density, ρ:</label>
             <input
               type="number"
               step="any"
@@ -502,7 +511,7 @@ const NodalAnalysisForm: React.FC<NodalAnalysisFormProps> = ({
           </div>
 
           <div style={rowStyle}>
-            <label style={labelStyle}>Oil Viscosity μ₀:</label>
+            <label style={labelStyle}>Oil Viscosity, μ₀:</label>
             <input
               type="number"
               step="any"

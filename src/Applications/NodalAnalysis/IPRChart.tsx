@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -43,29 +43,27 @@ const IPRChart: React.FC<IPRChartProps> = ({
   iprPhase,
 }) => {
   // --- Units & defaults ------------------------------------------------------
-  const flowUnits = Object.keys(UnitConverter.flowrateFactors);
-  const pressureUnits = Object.keys(UnitConverter.pressureFactors);
+  const flowUnits = useMemo(() => Object.keys(UnitConverter.flowrateFactors), []);
+  const pressureUnits = useMemo(() => Object.keys(UnitConverter.pressureFactors), []);
 
   const allUnits = unitSystems as UnitSystems;
   const userUnits: UnitSystemDefinition = allUnits[selectedUnitSystem] || {} as UnitSystemDefinition;
   const userFlowUnit = userUnits.flowrate;
   const userPressUnit = userUnits.pressure;
 
-  const fallbackFlowUnit = flowUnits[0] || 'm³/day';
-  const fallbackPressUnit = pressureUnits[0] || 'Pa';
+  const fallbackFlowUnit = useMemo(() => flowUnits[0] || 'm³/day', [flowUnits]);
+  const fallbackPressUnit = useMemo(() => pressureUnits[0] || 'Pa', [pressureUnits]);
 
-  const computeDefaultFlowUnit = useCallback(() => (
-    iprPhase === 'Gas' && selectedUnitSystem === 'Oil Field'
-      ? 'MCF/day'
-      : (userFlowUnit && flowUnits.includes(userFlowUnit))
-        ? userFlowUnit
-        : fallbackFlowUnit
-  ), [iprPhase, selectedUnitSystem, userFlowUnit, flowUnits, fallbackFlowUnit]);
+  const computeDefaultFlowUnit = useCallback(() => {
+    if (iprPhase === 'Gas' && selectedUnitSystem === 'Oil Field') return 'MCF/day';
+    if (userFlowUnit && flowUnits.includes(userFlowUnit)) return userFlowUnit;
+    return fallbackFlowUnit;
+  }, [iprPhase, selectedUnitSystem, userFlowUnit, flowUnits, fallbackFlowUnit]);
 
-  const defaultPressUnit =
-    userPressUnit && pressureUnits.includes(userPressUnit)
-      ? userPressUnit
-      : fallbackPressUnit;
+  const defaultPressUnit = useMemo(() => {
+    if (userPressUnit && pressureUnits.includes(userPressUnit)) return userPressUnit;
+    return fallbackPressUnit;
+  }, [userPressUnit, pressureUnits, fallbackPressUnit]);
 
   const [xUnit, setXUnit] = useState(computeDefaultFlowUnit());
   const [yUnit, setYUnit] = useState(defaultPressUnit);
@@ -78,6 +76,11 @@ const IPRChart: React.FC<IPRChartProps> = ({
   useEffect(() => {
     setXUnit(computeDefaultFlowUnit());
   }, [computeDefaultFlowUnit]);
+
+  useEffect(() => {
+    setYUnit(defaultPressUnit);
+  }, [defaultPressUnit]);
+
 
   const safeXUnit = flowUnits.includes(xUnit) ? xUnit : fallbackFlowUnit;
   const safeYUnit = pressureUnits.includes(yUnit) ? yUnit : fallbackPressUnit;
